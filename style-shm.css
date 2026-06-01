@@ -1,0 +1,220 @@
+/* ============================================================
+   style-shm.css — مؤسسة شادي الملكاوي | Brand Theme Override
+   يُحمَّل فوق style.css ويغلب عليه
+   ============================================================ */
+
+/* ── Brand Color Tokens ─────────────────────────────────── */
+:root {
+    /* Primary — أزرق ملكي عميق */
+    --gold:        #1A3A8F;
+    --gold-light:  #2E5CC8;
+    --gold-dark:   #0F2260;
+    --gold-subtle: rgba(26, 58, 143, 0.08);
+    --shadow-gold: 0 8px 32px rgba(26,58,143,.22), 0 2px 8px rgba(26,58,143,.12);
+    --shadow-gold-sm: 0 4px 16px rgba(26,58,143,.18);
+
+    /* Accent — أحمر دافئ بدل الـ ruby */
+    --ruby:        #8B1A1A;
+    --ruby-light:  #C02525;
+
+    /* Surface */
+    --paper:      #F8FAFF;
+    --paper-warm: #EEF2FF;
+    --paper-2:    #E3E9FF;
+    --border:     rgba(26, 58, 143, 0.18);
+    --border-2:   rgba(26, 58, 143, 0.08);
+    --border-strong: rgba(26, 58, 143, 0.35);
+}
+
+/* ── Dark Mode Overrides ────────────────────────────────── */
+[data-theme="dark"] {
+    --gold:        #4A7AE8;
+    --gold-light:  #7AA0F0;
+    --gold-dark:   #2E5CC8;
+    --gold-subtle: rgba(74, 122, 232, 0.12);
+    --paper:       #0D1528;
+    --paper-warm:  #111E38;
+    --paper-2:     #162240;
+    --border:      rgba(74, 122, 232, 0.22);
+}
+
+/* ── Topbar ─────────────────────────────────────────────── */
+.topbar {
+    background: linear-gradient(135deg, #0F2260 0%, #1A3A8F 60%, #2E5CC8 100%);
+    border-bottom: 2px solid rgba(255,255,255,.12);
+}
+
+.brand-gem {
+    background: rgba(255,255,255,.15);
+    border: 2px solid rgba(255,255,255,.25);
+}
+
+/* ── Intro Screen ───────────────────────────────────────── */
+#introScreen {
+    background: linear-gradient(135deg, #0F2260 0%, #1A3A8F 50%, #2251C8 100%);
+}
+
+.intro-diamond-ring {
+    border-color: rgba(255,255,255,.3);
+    box-shadow: 0 0 40px rgba(255,255,255,.15);
+}
+
+.intro-name span {
+    color: #7AA0F0;
+}
+
+.intro-bar-fill {
+    background: linear-gradient(90deg, #4A7AE8, #7AA0F0);
+}
+
+/* ── Auth Screen ────────────────────────────────────────── */
+#authScreen {
+    background: linear-gradient(135deg, #0F2260 0%, #1A3A8F 60%, #2E5CC8 100%);
+}
+
+.auth-orb-1 {
+    background: radial-gradient(circle, rgba(74,122,232,.4) 0%, transparent 70%);
+}
+.auth-orb-2 {
+    background: radial-gradient(circle, rgba(46,92,200,.35) 0%, transparent 70%);
+}
+
+.auth-card {
+    background: rgba(255,255,255,.97);
+    border: 1.5px solid rgba(26,58,143,.2);
+}
+
+[data-theme="dark"] .auth-card {
+    background: rgba(13,21,40,.97);
+    border: 1.5px solid rgba(74,122,232,.3);
+}
+
+.auth-gem {
+    background: rgba(26,58,143,.1);
+    border: 2px solid rgba(26,58,143,.2);
+}
+
+.btn-auth {
+    background: linear-gradient(135deg, #1A3A8F, #2E5CC8);
+    box-shadow: 0 4px 20px rgba(26,58,143,.35);
+}
+.btn-auth:hover {
+    background: linear-gradient(135deg, #0F2260, #1A3A8F);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(26,58,143,.45);
+}
+
+/* ── Navigation ─────────────────────────────────────────── */
+.desktop-nav-wrapper {
+    background: rgba(248,250,255,.95);
+    border-bottom: 2px solid rgba(26,58,143,.12);
+}
+
+[data-theme="dark"] .desktop-nav-wrapper {
+    background: rgba(13,21,40,.95);
+}
+
+.nav-btn.active {
+    color: #1A3A8F;
+    border-bottom-color: #1A3A8F;
+    background: rgba(26,58,143,.06);
+}
+
+[data-theme="dark"] .nav-btn.active {
+    color: #4A7AE8;
+    border-bottom-color: #4A7AE8;
+}
+
+/* ── KPI Cards ──────────────────────────────────────────── */
+.kpi-gold {
+    background: linear-gradient(135deg, #1A3A8F, #2E5CC8);
+}
+
+/* ── Buttons ────────────────────────────────────────────── */
+.btn-j.btn-gold {
+    background: linear-gradient(135deg, #1A3A8F, #2E5CC8);
+    color: #fff;
+    border-color: transparent;
+}
+.btn-j.btn-gold:hover {
+    background: linear-gradient(135deg, #0F2260, #1A3A8F);
+}
+
+/* ── Cards top border accent ───────────────────────────── */
+.item-card {
+    border-top-color: #1A3A8F;
+}
+
+/* ── Color Picker Popup border ──────────────────────────── */
+.color-picker-popup {
+    border-color: #1A3A8F;
+}
+
+/* ── Kanban section header dot ──────────────────────────── */
+.kanban-dot {
+    box-shadow: 0 0 6px rgba(26,58,143,.4);
+}
+
+/* ── Badges & Status ────────────────────────────────────── */
+.badge-j.badge-new {
+    background: rgba(26,58,143,.12);
+    color: #1A3A8F;
+}
+[data-theme="dark"] .badge-j.badge-new {
+    background: rgba(74,122,232,.18);
+    color: #7AA0F0;
+}
+
+/* ── Form Focus ─────────────────────────────────────────── */
+.form-control-j:focus {
+    border-color: #1A3A8F;
+    box-shadow: 0 0 0 3px rgba(26,58,143,.12);
+}
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar-thumb {
+    background: rgba(26,58,143,.3);
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(26,58,143,.5);
+}
+
+/* ── Page Title underline ───────────────────────────────── */
+.page-title::after {
+    background: linear-gradient(90deg, #1A3A8F, #2E5CC8);
+}
+
+/* ── Wizard progress bar ─────────────────────────────────  */
+#wiz-progress {
+    background: linear-gradient(90deg, #1A3A8F, #2E5CC8) !important;
+}
+
+/* ── Bottom Nav active ──────────────────────────────────── */
+.bottom-nav .nav-btn.active {
+    color: #1A3A8F;
+}
+[data-theme="dark"] .bottom-nav .nav-btn.active {
+    color: #4A7AE8;
+}
+
+/* ── Search bar focus ───────────────────────────────────── */
+.search-bar:focus-within {
+    border-color: rgba(26,58,143,.4);
+    box-shadow: 0 0 0 3px rgba(26,58,143,.08);
+}
+
+/* ── Toast success ──────────────────────────────────────── */
+.toast-j.success {
+    background: linear-gradient(135deg, #1A3A8F, #2E5CC8);
+}
+
+/* ── Custom Color Modal border ──────────────────────────── */
+#customColorModal .modal-title i {
+    color: #1A3A8F !important;
+}
+
+/* ── Intro animation ────────────────────────────────────── */
+@keyframes pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(255,255,255,.2); }
+    50%       { transform: scale(1.05); box-shadow: 0 0 40px rgba(255,255,255,.4); }
+}
