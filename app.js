@@ -3576,17 +3576,19 @@ updateRetSizes(itemIdx) {
 
    _wizStepMobile(body) {
         body.innerHTML = this._wizLabel('رقم الموبايل') + `
-            <div style="display:flex;flex-direction:row;gap:.5rem;align-items:center" dir="ltr">
-                <span style="background:var(--paper-warm);border:1.5px solid var(--border);border-radius:10px;padding:.85rem 1rem;font-size:1.1rem;font-weight:700;color:var(--ink-mid);white-space:nowrap">07</span>
-                <input type="text" id="wiz_mobile" class="form-control-j" style="font-size:1.2rem;padding:.85rem 1rem;flex:1;text-align:left" dir="ltr"
-                    placeholder="9XXXXXXX" maxlength="8" value="${this._wiz.mobile}"
-                    oninput="this.value=this.value.replace(/\\D/g,'');app._wizCheckDup(this.value)"
-                    onkeydown="if(event.key==='Enter')app._wizNext()">
-            </div>
-            <div style="font-size:.75rem;color:var(--ink-mid);margin-top:.4rem;text-align:center">
-                مثال: 0798054014 ← أدخل الأرقام بعد 07 فقط
-            </div>
-            <div id="wiz_dup" style="margin-top:.75rem;font-size:.82rem;display:none"></div>`;
+      <div style="display:flex;flex-direction:row;gap:.5rem;align-items:stretch" dir="ltr">
+        <span style="background:var(--paper-warm);border:1.5px solid var(--border);border-radius:12px;padding:.9rem 1.1rem;font-size:1.15rem;font-weight:800;color:var(--ink-mid);white-space:nowrap;display:flex;align-items:center;flex-shrink:0">07</span>
+        <input type="tel" id="wiz_mobile" class="form-control-j"
+          inputmode="numeric" pattern="[0-9]*"
+          style="font-size:1.4rem;padding:.9rem 1rem;flex:1;text-align:left;letter-spacing:2px;min-height:54px" dir="ltr"
+          placeholder="9XXXXXXX" maxlength="8" value="${this._wiz.mobile}"
+          oninput="this.value=this.value.replace(/\\D/g,'');app._wizCheckDup(this.value)"
+          onkeydown="if(event.key==='Enter')app._wizNext()">
+      </div>
+      <div style="font-size:.75rem;color:var(--ink-mid);margin-top:.5rem;text-align:center">
+        أدخل 8 أرقام بعد 07 — مثال: 9XXXXXXX
+      </div>
+      <div id="wiz_dup" style="margin-top:.75rem;font-size:.82rem;display:none"></div>`;
         // Check duplicate
         if (this._wiz.mobile.length === 8) this._wizCheckDup(this._wiz.mobile);
         document.getElementById('wiz_mobile')?.addEventListener('input', e => {

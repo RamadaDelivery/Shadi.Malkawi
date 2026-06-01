@@ -3,30 +3,26 @@
    يُحمَّل فوق style.css ويغلب عليه
    ============================================================ */
 
-/* ── Brand Color Tokens ─────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   Brand Color Tokens
+══════════════════════════════════════════════════════════ */
 :root {
-    /* Primary — أزرق ملكي عميق */
     --gold:        #1A3A8F;
     --gold-light:  #2E5CC8;
     --gold-dark:   #0F2260;
     --gold-subtle: rgba(26, 58, 143, 0.08);
-    --shadow-gold: 0 8px 32px rgba(26,58,143,.22), 0 2px 8px rgba(26,58,143,.12);
+    --shadow-gold:    0 8px 32px rgba(26,58,143,.22), 0 2px 8px rgba(26,58,143,.12);
     --shadow-gold-sm: 0 4px 16px rgba(26,58,143,.18);
-
-    /* Accent — أحمر دافئ بدل الـ ruby */
     --ruby:        #8B1A1A;
     --ruby-light:  #C02525;
-
-    /* Surface */
-    --paper:      #F8FAFF;
-    --paper-warm: #EEF2FF;
-    --paper-2:    #E3E9FF;
-    --border:     rgba(26, 58, 143, 0.18);
-    --border-2:   rgba(26, 58, 143, 0.08);
+    --paper:       #F8FAFF;
+    --paper-warm:  #EEF2FF;
+    --paper-2:     #E3E9FF;
+    --border:      rgba(26, 58, 143, 0.18);
+    --border-2:    rgba(26, 58, 143, 0.08);
     --border-strong: rgba(26, 58, 143, 0.35);
 }
 
-/* ── Dark Mode Overrides ────────────────────────────────── */
 [data-theme="dark"] {
     --gold:        #4A7AE8;
     --gold-light:  #7AA0F0;
@@ -38,183 +34,385 @@
     --border:      rgba(74, 122, 232, 0.22);
 }
 
-/* ── Topbar ─────────────────────────────────────────────── */
-.topbar {
-    background: linear-gradient(135deg, #0F2260 0%, #1A3A8F 60%, #2E5CC8 100%);
-    border-bottom: 2px solid rgba(255,255,255,.12);
-}
-
-.brand-gem {
-    background: rgba(255,255,255,.15);
-    border: 2px solid rgba(255,255,255,.25);
-}
-
-/* ── Intro Screen ───────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   INTRO SCREEN
+══════════════════════════════════════════════════════════ */
 #introScreen {
     background: linear-gradient(135deg, #0F2260 0%, #1A3A8F 50%, #2251C8 100%);
 }
-
 .intro-diamond-ring {
     border-color: rgba(255,255,255,.3);
     box-shadow: 0 0 40px rgba(255,255,255,.15);
 }
+.intro-name span { color: #7AA0F0; }
+.intro-bar-fill  { background: linear-gradient(90deg, #4A7AE8, #7AA0F0); }
 
-.intro-name span {
-    color: #7AA0F0;
-}
-
-.intro-bar-fill {
-    background: linear-gradient(90deg, #4A7AE8, #7AA0F0);
-}
-
-/* ── Auth Screen ────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   AUTH SCREEN — FIX: text visible on white card
+══════════════════════════════════════════════════════════ */
 #authScreen {
     background: linear-gradient(135deg, #0F2260 0%, #1A3A8F 60%, #2E5CC8 100%);
 }
+.auth-orb-1 { background: radial-gradient(circle, rgba(74,122,232,.4) 0%, transparent 70%); }
+.auth-orb-2 { background: radial-gradient(circle, rgba(46,92,200,.35) 0%, transparent 70%); }
 
-.auth-orb-1 {
-    background: radial-gradient(circle, rgba(74,122,232,.4) 0%, transparent 70%);
-}
-.auth-orb-2 {
-    background: radial-gradient(circle, rgba(46,92,200,.35) 0%, transparent 70%);
-}
-
+/* البطاقة: خلفية بيضاء صلبة */
 .auth-card {
-    background: rgba(255,255,255,.97);
-    border: 1.5px solid rgba(26,58,143,.2);
+    background: #ffffff !important;
+    border: 1.5px solid rgba(26,58,143,.25) !important;
+    box-shadow: 0 32px 80px rgba(0,0,0,.35), 0 0 0 1px rgba(26,58,143,.08) !important;
 }
-
 [data-theme="dark"] .auth-card {
-    background: rgba(13,21,40,.97);
-    border: 1.5px solid rgba(74,122,232,.3);
+    background: #0D1528 !important;
+    border: 1.5px solid rgba(74,122,232,.35) !important;
 }
 
-.auth-gem {
-    background: rgba(26,58,143,.1);
-    border: 2px solid rgba(26,58,143,.2);
+/* عنوان وصف البطاقة */
+.auth-card h2 { color: #1A3A8F !important; }
+.auth-card p  { color: #555 !important; }
+[data-theme="dark"] .auth-card h2 { color: #7AA0F0 !important; }
+[data-theme="dark"] .auth-card p  { color: rgba(255,255,255,.55) !important; }
+
+/* أيقونة الحقل */
+.auth-field-icon { color: rgba(26,58,143,.5) !important; }
+.auth-field:focus-within .auth-field-icon { color: #1A3A8F !important; }
+[data-theme="dark"] .auth-field-icon { color: rgba(74,122,232,.6) !important; }
+[data-theme="dark"] .auth-field:focus-within .auth-field-icon { color: #7AA0F0 !important; }
+
+/* حقل الإدخال: نص داكن على خلفية فاتحة */
+.auth-input {
+    background: #F4F7FF !important;
+    border: 1.5px solid rgba(26,58,143,.2) !important;
+    border-radius: 14px !important;
+    color: #1A1A2E !important;
+    padding: .9rem 2.8rem .9rem 1.1rem !important;
+    font-family: 'Almarai', sans-serif;
+    font-size: .93rem;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+    display: block;
+    width: 100%;
+}
+.auth-input::placeholder { color: rgba(26,58,143,.35) !important; }
+.auth-input:focus {
+    border-color: rgba(26,58,143,.55) !important;
+    box-shadow: 0 0 0 3px rgba(26,58,143,.1) !important;
+    background: #fff !important;
 }
 
+/* Dark mode inputs */
+[data-theme="dark"] .auth-input {
+    background: rgba(74,122,232,.08) !important;
+    border-color: rgba(74,122,232,.25) !important;
+    color: #E8EFFF !important;
+}
+[data-theme="dark"] .auth-input::placeholder { color: rgba(122,160,240,.4) !important; }
+[data-theme="dark"] .auth-input:focus {
+    background: rgba(74,122,232,.12) !important;
+    border-color: rgba(74,122,232,.5) !important;
+}
+
+/* زر الدخول */
 .btn-auth {
-    background: linear-gradient(135deg, #1A3A8F, #2E5CC8);
-    box-shadow: 0 4px 20px rgba(26,58,143,.35);
+    background: linear-gradient(135deg, #1A3A8F, #2E5CC8) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 20px rgba(26,58,143,.35) !important;
 }
 .btn-auth:hover {
-    background: linear-gradient(135deg, #0F2260, #1A3A8F);
+    background: linear-gradient(135deg, #0F2260, #1A3A8F) !important;
     transform: translateY(-1px);
-    box-shadow: 0 6px 24px rgba(26,58,143,.45);
+    box-shadow: 0 6px 24px rgba(26,58,143,.45) !important;
 }
 
-/* ── Navigation ─────────────────────────────────────────── */
+/* gem */
+.auth-gem {
+    background: linear-gradient(145deg, #2E5CC8, #1A3A8F) !important;
+    border: none !important;
+    box-shadow: 0 0 0 8px rgba(26,58,143,.1), 0 8px 32px rgba(26,58,143,.3) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   TOPBAR — FIX: white text/icons on dark blue background
+══════════════════════════════════════════════════════════ */
+.topbar {
+    background: linear-gradient(135deg, #0F2260 0%, #1A3A8F 60%, #2251C8 100%) !important;
+    border-bottom: 2px solid rgba(255,255,255,.1);
+    box-shadow: 0 2px 16px rgba(15,34,96,.4);
+}
+[data-theme="dark"] .topbar {
+    background: linear-gradient(135deg, #080F2A 0%, #0F2260 60%, #162880 100%) !important;
+}
+
+/* الشعار والاسم */
+.brand-gem {
+    background: rgba(255,255,255,.15) !important;
+    border: 2px solid rgba(255,255,255,.3) !important;
+    box-shadow: none !important;
+}
+.brand-name { color: #ffffff !important; font-size: .95rem !important; }
+.brand-sub  { color: rgba(255,255,255,.65) !important; }
+
+/* الأيقونات */
+.btn-icon {
+    color: rgba(255,255,255,.8) !important;
+    border-color: rgba(255,255,255,.15) !important;
+    background: rgba(255,255,255,.05) !important;
+}
+.btn-icon:hover {
+    color: #ffffff !important;
+    background: rgba(255,255,255,.15) !important;
+    border-color: rgba(255,255,255,.3) !important;
+}
+
+/* بيانات المستخدم */
+.user-pill {
+    background: rgba(255,255,255,.12) !important;
+    border-color: rgba(255,255,255,.2) !important;
+}
+.user-pill:hover { border-color: rgba(255,255,255,.35) !important; }
+
+.user-avatar {
+    background: linear-gradient(145deg, #4A7AE8, #2E5CC8) !important;
+    color: #ffffff !important;
+}
+.user-name { color: #ffffff !important; }
+.user-role { color: rgba(255,255,255,.7) !important; opacity: 1 !important; }
+
+/* ══════════════════════════════════════════════════════════
+   NAVIGATION
+══════════════════════════════════════════════════════════ */
 .desktop-nav-wrapper {
-    background: rgba(248,250,255,.95);
+    background: rgba(248,250,255,.97) !important;
     border-bottom: 2px solid rgba(26,58,143,.12);
 }
-
 [data-theme="dark"] .desktop-nav-wrapper {
-    background: rgba(13,21,40,.95);
+    background: rgba(13,21,40,.97) !important;
 }
 
 .nav-btn.active {
-    color: #1A3A8F;
-    border-bottom-color: #1A3A8F;
-    background: rgba(26,58,143,.06);
+    color: #1A3A8F !important;
+    border-bottom-color: #1A3A8F !important;
+    background: rgba(26,58,143,.07) !important;
 }
-
 [data-theme="dark"] .nav-btn.active {
-    color: #4A7AE8;
-    border-bottom-color: #4A7AE8;
+    color: #7AA0F0 !important;
+    border-bottom-color: #7AA0F0 !important;
+    background: rgba(74,122,232,.1) !important;
 }
 
-/* ── KPI Cards ──────────────────────────────────────────── */
-.kpi-gold {
-    background: linear-gradient(135deg, #1A3A8F, #2E5CC8);
+.bottom-nav .nav-btn.active { color: #1A3A8F !important; }
+[data-theme="dark"] .bottom-nav .nav-btn.active { color: #7AA0F0 !important; }
+
+/* ══════════════════════════════════════════════════════════
+   DARK MODE — FIX: RBAC banner and general contrast
+══════════════════════════════════════════════════════════ */
+
+/* RBAC Security banner */
+[data-theme="dark"] .security-banner,
+[data-theme="dark"] [style*="rgba(26,58,107,.08)"] {
+    background: rgba(74,122,232,.1) !important;
+    border-color: rgba(74,122,232,.3) !important;
+}
+/* نص داخل الـ RBAC banner في الوضع الليلي */
+[data-theme="dark"] .security-banner *,
+[data-theme="dark"] [style*="rgba(26,58,107,.08)"] * {
+    color: #C8D8FF !important;
+}
+[data-theme="dark"] [style*="rgba(26,58,107,.08)"] .fas {
+    color: #7AA0F0 !important;
 }
 
-/* ── Buttons ────────────────────────────────────────────── */
+/* نص عام في الوضع الليلي */
+[data-theme="dark"] { color-scheme: dark; }
+[data-theme="dark"] body { color: #E0E8FF; }
+
+/* ══════════════════════════════════════════════════════════
+   BUTTONS & COMPONENTS
+══════════════════════════════════════════════════════════ */
 .btn-j.btn-gold {
-    background: linear-gradient(135deg, #1A3A8F, #2E5CC8);
-    color: #fff;
-    border-color: transparent;
+    background: linear-gradient(135deg, #1A3A8F, #2E5CC8) !important;
+    color: #fff !important;
+    border-color: transparent !important;
 }
 .btn-j.btn-gold:hover {
-    background: linear-gradient(135deg, #0F2260, #1A3A8F);
+    background: linear-gradient(135deg, #0F2260, #1A3A8F) !important;
 }
 
-/* ── Cards top border accent ───────────────────────────── */
-.item-card {
-    border-top-color: #1A3A8F;
+.kpi-gold {
+    background: linear-gradient(135deg, #1A3A8F, #2E5CC8) !important;
 }
 
-/* ── Color Picker Popup border ──────────────────────────── */
-.color-picker-popup {
-    border-color: #1A3A8F;
-}
+.item-card { border-top-color: #1A3A8F !important; }
 
-/* ── Kanban section header dot ──────────────────────────── */
-.kanban-dot {
-    box-shadow: 0 0 6px rgba(26,58,143,.4);
-}
+.color-picker-popup { border-color: #1A3A8F !important; }
 
-/* ── Badges & Status ────────────────────────────────────── */
-.badge-j.badge-new {
-    background: rgba(26,58,143,.12);
-    color: #1A3A8F;
-}
-[data-theme="dark"] .badge-j.badge-new {
-    background: rgba(74,122,232,.18);
-    color: #7AA0F0;
-}
-
-/* ── Form Focus ─────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   FORMS
+══════════════════════════════════════════════════════════ */
 .form-control-j:focus {
-    border-color: #1A3A8F;
-    box-shadow: 0 0 0 3px rgba(26,58,143,.12);
+    border-color: #1A3A8F !important;
+    box-shadow: 0 0 0 3px rgba(26,58,143,.12) !important;
 }
 
-/* ── Scrollbar ──────────────────────────────────────────── */
-::-webkit-scrollbar-thumb {
-    background: rgba(26,58,143,.3);
-}
-::-webkit-scrollbar-thumb:hover {
-    background: rgba(26,58,143,.5);
-}
-
-/* ── Page Title underline ───────────────────────────────── */
-.page-title::after {
-    background: linear-gradient(90deg, #1A3A8F, #2E5CC8);
-}
-
-/* ── Wizard progress bar ─────────────────────────────────  */
-#wiz-progress {
-    background: linear-gradient(90deg, #1A3A8F, #2E5CC8) !important;
-}
-
-/* ── Bottom Nav active ──────────────────────────────────── */
-.bottom-nav .nav-btn.active {
-    color: #1A3A8F;
-}
-[data-theme="dark"] .bottom-nav .nav-btn.active {
-    color: #4A7AE8;
-}
-
-/* ── Search bar focus ───────────────────────────────────── */
 .search-bar:focus-within {
-    border-color: rgba(26,58,143,.4);
-    box-shadow: 0 0 0 3px rgba(26,58,143,.08);
+    border-color: rgba(26,58,143,.4) !important;
+    box-shadow: 0 0 0 3px rgba(26,58,143,.08) !important;
 }
 
-/* ── Toast success ──────────────────────────────────────── */
-.toast-j.success {
-    background: linear-gradient(135deg, #1A3A8F, #2E5CC8);
-}
+/* ══════════════════════════════════════════════════════════
+   MISC
+══════════════════════════════════════════════════════════ */
+::-webkit-scrollbar-thumb       { background: rgba(26,58,143,.3); }
+::-webkit-scrollbar-thumb:hover { background: rgba(26,58,143,.5); }
 
-/* ── Custom Color Modal border ──────────────────────────── */
-#customColorModal .modal-title i {
-    color: #1A3A8F !important;
-}
+.page-title::after { background: linear-gradient(90deg, #1A3A8F, #2E5CC8) !important; }
 
-/* ── Intro animation ────────────────────────────────────── */
+#wiz-progress { background: linear-gradient(90deg, #1A3A8F, #2E5CC8) !important; }
+
+.toast-j.success { background: linear-gradient(135deg, #1A3A8F, #2E5CC8) !important; }
+
+.badge-j.badge-new { background: rgba(26,58,143,.12) !important; color: #1A3A8F !important; }
+[data-theme="dark"] .badge-j.badge-new { background: rgba(74,122,232,.2) !important; color: #7AA0F0 !important; }
+
+#customColorModal .modal-title i { color: #1A3A8F !important; }
+
+/* ══════════════════════════════════════════════════════════
+   ANIMATIONS
+══════════════════════════════════════════════════════════ */
 @keyframes pulse {
-    0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(255,255,255,.2); }
+    0%, 100% { transform: scale(1);    box-shadow: 0 0 20px rgba(255,255,255,.2); }
     50%       { transform: scale(1.05); box-shadow: 0 0 40px rgba(255,255,255,.4); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE FIXES — إصلاحات الموبايل الشاملة
+   (max-width: 600px)
+══════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+
+    /* ── 1. حقل رقم الموبايل في الويزرد ─────────────────── */
+    /* المربع "07" والحقل بجانبه — نكبر كليهم */
+    #wiz-body [dir="ltr"] > span {
+        padding: 1rem 1.1rem !important;
+        font-size: 1.25rem !important;
+        border-radius: 12px !important;
+        min-width: 58px;
+    }
+    #wiz_mobile {
+        font-size: 1.4rem !important;
+        padding: 1rem 1rem !important;
+        letter-spacing: 3px;
+        min-height: 56px;
+    }
+
+    /* ── 2. الويزرد العام ────────────────────────────────── */
+    #wiz-shell {
+        padding: .5rem !important;
+        min-height: 100dvh;
+        justify-content: flex-start !important;
+        padding-top: 1rem !important;
+    }
+    /* شريط التقدم */
+    #wiz-shell > div:first-child {
+        margin-bottom: 1rem !important;
+        padding: 0 .25rem;
+    }
+    /* الكارت الرئيسي */
+    #wiz-card {
+        padding: 1.5rem 1.25rem !important;
+        min-height: 0 !important;
+        border-radius: 16px !important;
+    }
+    /* العنوان الكبير في كل خطوة */
+    #wiz-body > div[style*="font-size:1.5rem"],
+    #wiz-body > div[style*="font-size: 1.5rem"] {
+        font-size: 1.2rem !important;
+        margin-bottom: 1rem !important;
+    }
+    /* حقول الإدخال الكبيرة */
+    #wiz_custName, #wiz_addr, #wiz_price {
+        font-size: 1.1rem !important;
+        padding: .9rem 1rem !important;
+    }
+    /* أزرار التالي/تراجع */
+    #wiz-nav { margin-top: 1.25rem !important; }
+    #wiz-nav .btn-j { padding: .85rem 1.2rem !important; font-size: .95rem !important; }
+
+    /* ── 3. خطوة المنتجات — item rows ───────────────────── */
+    .item-row-card { padding: .65rem .75rem !important; margin-bottom: .5rem !important; }
+    .item-row-fields {
+        grid-template-columns: 1fr 1fr !important;
+        gap: .5rem !important;
+    }
+    .item-row-product { grid-column: span 2 !important; }
+    .item-row-color   { grid-column: span 1; }
+    .item-row-size    { grid-column: span 1; }
+    .item-row-qty     { grid-column: span 2; }
+
+    /* حقل اللون — أكبر للضغط */
+    .ir-color { min-height: 42px !important; font-size: .88rem !important; }
+    #ir_color_btn_0, [id^="ir_color_btn_"] {
+        min-width: 42px !important; min-height: 42px !important;
+        padding: .4rem .6rem !important;
+    }
+
+    /* Qty في الموبايل */
+    .item-row-qty .qty-control { justify-content: center; gap: .5rem !important; }
+    .item-row-qty .qty-btn { width: 38px !important; height: 42px !important; }
+    .item-row-qty .qty-input { width: 56px !important; font-size: 1rem !important; }
+
+    /* إضافة منتج آخر */
+    .add-item-row-btn { padding: .75rem 1rem !important; font-size: .9rem !important; }
+
+    /* ── 4. Color Picker Popup — ملء أعرض على الشاشة الصغيرة */
+    .color-picker-popup {
+        max-width: calc(100vw - 16px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        width: auto !important;
+        display: grid !important;
+        grid-template-columns: repeat(7, 1fr) !important;
+    }
+    .color-picker-popup > div {
+        width: 100% !important;
+        height: 36px !important;
+        border-radius: 6px !important;
+    }
+
+    /* ── 5. Topbar على الموبايل ──────────────────────────── */
+    .topbar { padding: .45rem .85rem !important; }
+    .brand-name { font-size: .82rem !important; }
+    .brand-sub  { display: none; }  /* إخفاء السطر الثاني لتوفير مساحة */
+    .brand-gem  { width: 34px !important; height: 34px !important; }
+    .user-pill  { padding: .25rem .6rem .25rem .3rem !important; }
+    .user-name  { font-size: .76rem !important; }
+    .user-role  { display: none; }  /* إخفاء الدور لتوفير مساحة */
+    .btn-icon   { width: 34px !important; height: 34px !important; }
+
+    /* ── 6. النصوص العامة في الصفحات ────────────────────── */
+    .page-title    { font-size: 1.3rem !important; }
+    .page-subtitle { font-size: .78rem !important; }
+    .page-header   { margin-bottom: 1.1rem !important; }
+
+    /* ── 7. القائمة السفلية — أيقونات أوضح ─────────────── */
+    .bottom-nav .nav-btn { padding: .5rem .15rem !important; font-size: .58rem !important; }
+    .bottom-nav .nav-btn i { font-size: 1.05rem !important; }
+
+    /* ── 8. Modal sheets — ملء الشاشة تقريباً ──────────── */
+    .modal-sheet {
+        max-height: 92dvh !important;
+        border-radius: 20px 20px 0 0 !important;
+        padding: 1.25rem 1.25rem 1.5rem !important;
+    }
+
+    /* ── 9. خطوة التأكيد (Confirm) ─────────────────────── */
+    .wiz-summary-row { padding: .35rem 0 !important; }
+    .wiz-summary-label { font-size: .74rem !important; min-width: 70px !important; }
+    .wiz-summary-val   { font-size: .84rem !important; }
+
+    /* ── 10. form-control عام — أكبر للمس ───────────────── */
+    .form-control-j { min-height: 44px; font-size: .9rem !important; }
+    .select-j       { min-height: 44px !important; }
+    .btn-j          { min-height: 40px; }
+    .btn-xs-j       { min-height: 34px !important; }
 }
