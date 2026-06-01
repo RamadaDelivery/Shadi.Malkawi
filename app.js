@@ -24,7 +24,7 @@ window.app = {
     selectedR: new Set(), selectedKb: new Set(),
     modalOrderId: null,
     lastOrderId: null,
-    isDark: localStorage.getItem('jwDark') === 'true',
+    isDark: localStorage.getItem('shmDark') === 'true',
    pSizeData: [],   // each element: { size, qty, color, colorHex }
     retSelectedOrderId: null,
     itemRows: [],
@@ -71,7 +71,7 @@ window.app = {
 
         this.user = u; this.role = ud.role; this.userName = ud.name;
         this.userPerms = ud.perms;
-localStorage.setItem('jwSession', JSON.stringify({ user: u, role: ud.role, name: ud.name }));        document.getElementById('authScreen').classList.remove('visible');
+localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name: ud.name }));        document.getElementById('authScreen').classList.remove('visible');
         document.getElementById('appContainer').style.display = 'block';
         document.getElementById('userName').textContent = ud.name;
         document.getElementById('userRole').textContent = ud.role;
@@ -95,7 +95,7 @@ localStorage.setItem('jwSession', JSON.stringify({ user: u, role: ud.role, name:
 
     logout() {
         this.user = null;
-        localStorage.removeItem('jwSession');
+        localStorage.removeItem('shmSession');
         document.getElementById('appContainer').style.display = 'none';
         document.getElementById('authScreen').classList.add('visible');
         document.getElementById('loginPass').value = '';
@@ -187,7 +187,7 @@ localStorage.setItem('jwSession', JSON.stringify({ user: u, role: ud.role, name:
     // ============ DARK MODE ============
     toggleDark() {
         this.isDark = !this.isDark;
-        localStorage.setItem('jwDark', this.isDark);
+        localStorage.setItem('shmDark', this.isDark);
         this.applyDark();
         if (document.getElementById('page-dashboard').classList.contains('active')) this.renderDashboard();
     },
@@ -223,7 +223,7 @@ localStorage.setItem('jwSession', JSON.stringify({ user: u, role: ud.role, name:
     // ── IndexedDB Cache helpers ───────────────────────────────
     async _cacheInit() {
         return new Promise((res, rej) => {
-            const req = indexedDB.open('JawaherCache', 1);
+            const req = indexedDB.open('ShmCache', 1);
             req.onupgradeneeded = e => {
                 const db = e.target.result;
                 if (!db.objectStoreNames.contains('data')) db.createObjectStore('data');
@@ -544,7 +544,7 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
                     app.updateLiveBalance(itemId);
                 }
             }
-            popup.remove();
+            popup?.parentNode && popup.remove();
             this._colorPickerOpen = null;
         };
 
@@ -1964,8 +1964,6 @@ async deductStock(orderId) {
             });
             const sortedColors = [...usedColors].sort();
             wColorSel.innerHTML = '<option value="">كل الألوان</option>' + sortedColors.map(c => {
-                const hex = this._colorHex(c);
-                const dot = hex ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${hex};border:1px solid rgba(0,0,0,.15);margin-left:4px;vertical-align:middle"></span>` : '';
                 return `<option value="${c}" ${cur === c ? 'selected' : ''}>${c}</option>`;
             }).join('');
             wColorSel.value = cur;
@@ -1976,7 +1974,16 @@ async deductStock(orderId) {
        items = items.filter(([, w]) => {
             // إضافة حماية لاسم المنتج والباركود
             if (q && !(w.name || '').toLowerCase().includes(q) && !(w.barcode || '').toLowerCase().includes(q)) return false;
-            if (colorF && w.color !== colorF) return false;
+            if (colorF) {
+                // فلترة شاملة: اللون العام + ألوان من مفاتيح المقاسات
+                const itemColors = new Set();
+                if (w.color) itemColors.add(w.color);
+                Object.keys(w.sizes || {}).forEach(key => {
+                    if (key.includes(' - ')) itemColors.add(key.split(' - ').slice(1).join(' - '));
+                });
+                Object.values(w.variations || {}).forEach(v => { if (v.color) itemColors.add(v.color); });
+                if (!itemColors.has(colorF)) return false;
+            }
             if (pageF && w.pageName !== pageF) return false;
             const total = Object.values(w.sizes || {}).reduce((a, b) => a + b, 0);
             if (stockF === 'low' && total >= 5) return false;
@@ -4098,7 +4105,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.sysUsers = snap.val() || {};
     });
 
-    const saved = localStorage.getItem('jwSession');
+    const saved = localStorage.getItem('shmSession');
     if (saved) {
         try {
             const s = JSON.parse(saved);
@@ -4109,7 +4116,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fbUser  = app.sysUsers[s.user];
                 const ud = builtIn || fbUser;
                 if (!ud) return;
-                if (ud.disabled) { localStorage.removeItem('jwSession'); return; }
+                if (ud.disabled) { localStorage.removeItem('shmSession'); return; }
 
                 app.user = s.user; app.role = s.role; app.userName = s.name;
                 app.userPerms = fbUser?.perms || {};
@@ -4133,7 +4140,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Firebase users: short wait for snapshot
                 setTimeout(restoreSession, 600);
             }
-        } catch(e) { localStorage.removeItem('jwSession'); }
+        } catch(e) { localStorage.removeItem('shmSession'); }
     }
     app.applyDark();
     app.initKeys();
