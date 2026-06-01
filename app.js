@@ -1267,8 +1267,13 @@ addItemRow() {
     },
     async kbBulkStatus(s) {
         const upd = {};
-        this.selectedKb.forEach(id => { upd[`jawaher_orders/${id}/status`] = s; if (s === 'delivered') this.deductStock(id); });
+        this.selectedKb.forEach(id => { upd[`jawaher_orders/${id}/status`] = s; });
         await update(ref(db), upd);
+        // خصم أو إرجاع المخزون بعد التحديث
+        for (const id of this.selectedKb) {
+            if (s === 'delivered') await this.deductStock(id);
+            if (s === 'canceled' || s === 'postponed') await this._returnStock(id);
+        }
         this.selectedKb.clear(); this.updateKbBulkPanel();
         this.toast('تم تحديث الحالة', 'success');
     },
@@ -1425,6 +1430,7 @@ async updateOrder() {
         const before = { status: this.orders[id]?.status };
         await update(ref(db, `jawaher_orders/${id}`), { status });
         if (status === 'delivered') await this.deductStock(id);
+        if (status === 'canceled' || status === 'postponed') await this._returnStock(id);
         this.log('status', id, `تغيير الحالة إلى ${STATUS_AR[status]}`);
         this._auditLog('order_edit', id, before, { status }, `تغيير حالة الطلب: ${STATUS_AR[before.status]} ← ${STATUS_AR[status]}`);
         this.toast('تم تغيير المرحلة', 'success'); this.closeModal('orderModal');
@@ -1485,6 +1491,34 @@ async deductStock(orderId) {
             await update(ref(db), updates);
         }
     },
+
+
+    // ── إرجاع المخزون عند الإلغاء أو التأجيل ──────────────
+    async _returnStock(orderId) {
+        const o = this.orders[orderId]; if (!o) return;
+        if (!o.stockDeducted) return; // لم يُخصم أصلاً
+
+        const itemsToReturn = o.items || [{ itemId: o.itemId, size: o.exactKey || o.size, exactKey: o.exactKey, itemColor: o.itemColor, qty: o.qty }];
+        const updates = {};
+
+        for (const it of itemsToReturn) {
+            if (!it.itemId) continue;
+            const item = this.warehouse[it.itemId]; if (!item) continue;
+            let key = it.exactKey || it.size;
+            if (item.sizes && item.sizes[key] === undefined && it.itemColor) {
+                if (item.sizes[`${it.size} - ${it.itemColor}`] !== undefined) key = `${it.size} - ${it.itemColor}`;
+            }
+            const current = item.sizes?.[key] || 0;
+            const qty = parseInt(it.qty) || 1;
+            updates[`jawaher_warehouse/${it.itemId}/sizes/${key}`] = current + qty;
+            this.log('stock', orderId, `إرجاع ${qty} قطعة لـ ${item.name} مقاس/لون ${key}`);
+        }
+
+        if (Object.keys(updates).length > 0) {
+            updates[`jawaher_orders/${orderId}/stockDeducted`] = false;
+            await update(ref(db), updates);
+        }
+    },
 
     // ============ PRINT ============
       printOrder(o, id) {
@@ -1799,8 +1833,13 @@ async deductStock(orderId) {
     },
     async rBulkStatus(s) {
         const upd = {};
-        this.selectedR.forEach(id => { upd[`jawaher_orders/${id}/status`] = s; if (s === 'delivered') this.deductStock(id); });
+        this.selectedR.forEach(id => { upd[`jawaher_orders/${id}/status`] = s; });
         await update(ref(db), upd);
+        // خصم أو إرجاع المخزون بعد التحديث
+        for (const id of this.selectedR) {
+            if (s === 'delivered') await this.deductStock(id);
+            if (s === 'canceled' || s === 'postponed') await this._returnStock(id);
+        }
         this.selectedR.clear(); this.updateRBulkPanel(); this.renderTable();
         this.toast('تم التحديث', 'success');
     },
