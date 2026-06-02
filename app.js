@@ -522,12 +522,30 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
             if (target) {
                 target.value = c.name;
                 target.dataset.hex = c.hex;
-                if (c.rainbow) {
-                    target.style.borderRight = '4px solid transparent';
-                    target.style.borderImage = 'linear-gradient(#ff0000,#ff7700,#ffff00,#00ff00,#0000ff,#8b00ff) 1';
+                // ── تحديث الـ preview المرئي لحقول ir_color ─────
+                if (targetId.startsWith('ir_color_')) {
+                    const idx = target.dataset.idx;
+                    const preview = document.getElementById(`ir_color_preview_${idx}`);
+                    if (preview) {
+                        const bgStyle = c.rainbow
+                            ? 'linear-gradient(135deg,#ff0000,#ff7700,#ffff00,#00ff00,#0000ff,#8b00ff)'
+                            : c.hex;
+                        preview.innerHTML = `
+                            <span style="width:18px;height:18px;border-radius:5px;background:${bgStyle};border:1.5px solid rgba(0,0,0,.12);flex-shrink:0;display:inline-block"></span>
+                            <span style="font-size:.82rem;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</span>`;
+                        preview.style.borderColor = c.rainbow ? 'transparent' : c.hex;
+                        preview.style.boxShadow = `0 0 0 2px ${c.hex}22`;
+                    }
+                    app.loadRowSizes(parseInt(idx), null, c.name);
                 } else {
-                    target.style.borderRight = `4px solid ${c.hex}`;
-                    target.style.borderImage = '';
+                    // الحقول الأخرى: border ملون كما كان
+                    if (c.rainbow) {
+                        target.style.borderRight = '4px solid transparent';
+                        target.style.borderImage = 'linear-gradient(#ff0000,#ff7700,#ffff00,#00ff00,#0000ff,#8b00ff) 1';
+                    } else {
+                        target.style.borderRight = `4px solid ${c.hex}`;
+                        target.style.borderImage = '';
+                    }
                 }
                 if (targetId.startsWith('psc_')) {
                     const i = parseInt(targetId.split('_')[1]);
@@ -535,9 +553,6 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
                         app.pSizeData[i].color = c.name;
                         app.pSizeData[i].colorHex = c.hex;
                     }
-                }
-                if (targetId.startsWith('ir_color_')) {
-                    app.loadRowSizes(parseInt(target.dataset.idx), null, c.name);
                 }
                 if (targetId === 'asColor') {
                     const itemId = document.querySelector('[onclick*="confirmAddStock"]')?.getAttribute('onclick').match(/'([^']+)'/)[1];
@@ -794,12 +809,25 @@ addItemRow() {
                     <div class="item-row-field item-row-color">
                         <label class="form-label-j">اللون</label>
                         <div style="display:flex;gap:4px;align-items:stretch">
-                            <input type="text" id="ir_color_${idx}" class="form-control-j ir-color" data-idx="${idx}"
-                                placeholder="اختر..." readonly value="${row.savedColor || ''}"
-                                data-hex="${row.savedColorHex || ''}"
-                                style="border-right:4px solid ${row.savedColorHex || 'var(--border)'};cursor:pointer;font-size:.82rem;flex:1"
-                                onclick="app.openColorPicker(${idx},'ir_color')">
-                            <button id="ir_color_btn_${idx}" class="btn-j btn-ghost btn-xs-j" onclick="app.openColorPicker(${idx},'ir_color')" style="padding:.3rem .5rem">
+                            <div id="ir_color_preview_${idx}"
+                                onclick="app.openColorPicker(${idx},'ir_color')"
+                                style="display:flex;align-items:center;gap:7px;flex:1;min-width:0;
+                                       padding:.42rem .65rem;border-radius:10px;cursor:pointer;
+                                       border:1.5px solid var(--border);background:var(--paper);
+                                       transition:border-color .18s,box-shadow .18s;user-select:none"
+                                onmouseenter="this.style.borderColor='var(--gold)'"
+                                onmouseleave="this.style.borderColor='var(--border)'">
+                                ${row.savedColorHex
+                                    ? `<span style="width:18px;height:18px;border-radius:5px;background:${row.savedColorHex};border:1.5px solid rgba(0,0,0,.12);flex-shrink:0;display:inline-block"></span>
+                                       <span style="font-size:.82rem;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${row.savedColor}</span>`
+                                    : `<i class="fas fa-palette" style="color:var(--gold);font-size:.85rem"></i>
+                                       <span style="font-size:.82rem;color:var(--ink-mid)">اختر اللون...</span>`
+                                }
+                            </div>
+                            <input type="hidden" id="ir_color_${idx}" class="ir-color" data-idx="${idx}"
+                                value="${row.savedColor || ''}" data-hex="${row.savedColorHex || ''}">
+                            <button id="ir_color_btn_${idx}" class="btn-j btn-ghost btn-xs-j"
+                                onclick="app.openColorPicker(${idx},'ir_color')" style="padding:.3rem .5rem;flex-shrink:0">
                                 <i class="fas fa-palette" style="color:var(--gold)"></i>
                             </button>
                         </div>
