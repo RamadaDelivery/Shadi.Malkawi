@@ -1646,69 +1646,100 @@ async deductStock(orderId) {
                     <td style="padding:2px 5px;border:1px solid #ddd;font-size:.72rem;text-align:center;font-weight:800">${it.qty || 1}</td>
                 </tr>`).join('');
 
+            // ── أيقونات التواصل ─────────────────────────────────
+            const contactChannel = o.contactChannel || '';
+            const contactIcons = {
+                'واتس اب':  { svg: `<svg width="13" height="13" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.557 4.126 1.526 5.858L.057 23.888a.5.5 0 0 0 .617.6l6.162-1.615A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.694-.528-5.217-1.446l-.374-.224-3.878 1.016 1.033-3.772-.244-.389A9.952 9.952 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>`, label: 'واتساب' },
+                'انستا':    { svg: `<svg width="13" height="13" viewBox="0 0 24 24"><defs><radialGradient id="ig" cx="30%" cy="107%" r="150%"><stop offset="0%" stop-color="#fdf497"/><stop offset="5%" stop-color="#fdf497"/><stop offset="45%" stop-color="#fd5949"/><stop offset="60%" stop-color="#d6249f"/><stop offset="90%" stop-color="#285AEB"/></radialGradient></defs><path fill="url(#ig)" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>`, label: 'انستغرام' },
+                'فيس بوك': { svg: `<svg width="13" height="13" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>`, label: 'فيسبوك' },
+            };
+            const chInfo = contactIcons[contactChannel];
+            const contactIconHtml = chInfo
+                ? `<span style="display:inline-flex;align-items:center;gap:2px;background:#f0f0f0;border-radius:4px;padding:1px 4px;vertical-align:middle">${chInfo.svg}<span style="font-size:.5rem;font-weight:700">${chInfo.label}</span></span>`
+                : '';
+
+            // ── وزن وطول ──────────────────────────────────────────
+            const weightVal = o.weightKg || '';
+            const lengthVal = o.lengthCm || '';
+            const weightLengthHtml = (weightVal || lengthVal) ? `
+                <div style="background:#f9f9f9;border-radius:3px;padding:2px 5px;border:1px solid #eee;display:flex;gap:6px">
+                    ${weightVal ? `<span style="font-size:.48rem;color:#888">وزن: <strong style="font-size:.6rem;color:#333">${weightVal} kg</strong></span>` : ''}
+                    ${weightVal && lengthVal ? `<span style="color:#ccc">|</span>` : ''}
+                    ${lengthVal ? `<span style="font-size:.48rem;color:#888">طول: <strong style="font-size:.6rem;color:#333">${lengthVal} cm</strong></span>` : ''}
+                </div>` : '';
+
             return `
 
             <div style="width:10cm;height:10cm;padding:3mm;display:block;page-break-after:always;overflow:hidden;box-sizing:border-box">
 
-                <div style="width:100%;height:100%;display:flex;flex-direction:column;border:2px solid #222;border-radius:5px;font-family:Almarai,Arial">
+                <div style="width:100%;height:100%;display:flex;flex-direction:column;border:2px solid #1A3A8F;border-radius:5px;font-family:Almarai,Arial">
 
-                    <!-- الهيدر -->
-                    <div style="text-align:center;padding:3px 6px;border-bottom:2px solid #222;background:#111;color:#C9A84C">
-                        <div style="font-size:0.95rem;font-weight:800;letter-spacing:1px">◆ ${finalPageHeader} ◆</div>
-                        <div style="font-size:.58rem;color:#aaa">#${id.slice(-8)} | ${o.date || ''}</div>
+                    <!-- الهيدر العلوي: اسم الصفحة | الرقم | اسم المدخل -->
+                    <div style="text-align:center;padding:3px 6px;border-bottom:2px solid #1A3A8F;background:#0F2260;color:#fff">
+                        <div style="font-size:0.92rem;font-weight:800;letter-spacing:.5px;color:#7AA0F0">◆ ${finalPageHeader} ◆</div>
+                        <div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:1px">
+                            <span style="font-size:.52rem;color:#aaa;direction:ltr">📞 077 65 01 333</span>
+                            <span style="color:#444;font-size:.5rem">|</span>
+                            <span style="font-size:.52rem;color:#aaa">👤 ${o.entryUser || ''}</span>
+                        </div>
                     </div>
 
                     <!-- الجسم الرئيسي - عمودين -->
                     <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:0;overflow:hidden">
 
-                        <!-- العمود الأيمن: اسم الزبون، العنوان، رقم التلفون، ملاحظات، السعر الشامل -->
-                        <div style="display:flex;flex-direction:column;gap:2px;padding:3px;border-left:1px solid #ddd">
-                            <div style="background:#f9f9f9;border-radius:3px;padding:2px 5px;border:1px solid #eee">
-                                <div style="font-size:.48rem;color:#888">اسم الزبون</div>
-                                <div style="font-size:.85rem;font-weight:800;line-height:1.2">${o.custName || ''}</div>
+                        <!-- العمود الأيمن: الزبون، التواصل، الصنف، اللون، المقاس، وزن/طول -->
+                        <div style="display:flex;flex-direction:column;gap:2px;padding:3px;border-left:1px solid #ccd">
+                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde">
+                                <div style="font-size:.44rem;color:#888">اسم الزبون</div>
+                                <div style="font-size:.82rem;font-weight:800;line-height:1.2">${o.custName || ''}</div>
                             </div>
-                            <div style="background:#f9f9f9;border-radius:3px;padding:2px 5px;border:1px solid #eee">
-                                <div style="font-size:.48rem;color:#888">عنوان</div>
-                                <div style="font-size:.68rem;font-weight:700;line-height:1.2">${o.governorate ? o.governorate + ' - ' : ''}${o.custAddr || '-'}</div>
+                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde;display:flex;align-items:center;gap:4px">
+                                <div style="font-size:.44rem;color:#888">التواصل:</div>
+                                <div>${contactIconHtml || '<span style="font-size:.52rem;color:#bbb">—</span>'}</div>
                             </div>
-                            <div style="background:#f9f9f9;border-radius:3px;padding:2px 5px;border:1px solid #eee">
-                                <div style="font-size:.48rem;color:#888">رقم تلفون</div>
-                                <div style="font-size:.85rem;font-weight:800;direction:ltr;text-align:right">${o.custMob || ''}</div>
-                            </div>
-                            <div style="background:#f9f9f9;border-radius:3px;padding:2px 5px;border:1px solid #eee;flex:1">
-                                <div style="font-size:.48rem;color:#888">ملاحظات</div>
-                                <div style="font-size:.65rem;font-weight:600">${o.tags || ''}</div>
-                            </div>
-                            <div style="background:#eef7f2;border-radius:3px;padding:2px 5px;border:1.5px solid #1A6B4A">
-                                <div style="font-size:.48rem;color:#1A6B4A">السعر الشامل</div>
-                                <div style="font-size:1rem;font-weight:800;color:#1A6B4A">${o.price || 0} JOD</div>
-                            </div>
-                        </div>
-
-                        <!-- العمود الأيسر: اسم الصنف، الموديل، القيمة -->
-                        <div style="display:flex;flex-direction:column;gap:2px;padding:3px">
-                            <div style="background:#f9f9f9;border-radius:3px;padding:2px 5px;border:1px solid #eee">
-                                <div style="font-size:.48rem;color:#888">اسم الصنف</div>
+                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde">
+                                <div style="font-size:.44rem;color:#888">اسم الصنف</div>
                                 <div style="font-size:.72rem;font-weight:800;line-height:1.2">${items.map(it => it.itemName || '').join('، ')}</div>
                             </div>
-                            <div style="background:#f9f9f9;border-radius:3px;padding:2px 5px;border:1px solid #eee">
-                                <div style="font-size:.48rem;color:#888">الموديل</div>
+                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde">
+                                <div style="font-size:.44rem;color:#888">اللون</div>
                                 <div style="font-size:.68rem;font-weight:700">${items.map(it => it.itemColor || '').join('، ') || '-'}</div>
                             </div>
-                            <div style="background:#f9f9f9;border-radius:3px;padding:2px 5px;border:1px solid #eee">
-                                <div style="font-size:.48rem;color:#888">المقاسات</div>
+                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde">
+                                <div style="font-size:.44rem;color:#888">المقاس</div>
                                 <div style="font-size:.72rem;font-weight:700">${items.map(it => it.size||'').filter(Boolean).join('، ') || '-'}</div>
                             </div>
-                            <div style="background:#fff8e6;border:1px solid #f0d080;border-radius:3px;padding:2px 5px;flex:1">
-                                <div style="font-size:.48rem;color:#888">القيمة</div>
-                                <div style="font-size:.68rem;font-weight:700">${items.map(it => `${it.size||''} ×${it.qty||1}`).join(' | ')}</div>
+                            ${weightLengthHtml}
+                        </div>
+
+                        <!-- العمود الأيسر: العنوان، الهاتف، القيمة شامل، ملاحظات -->
+                        <div style="display:flex;flex-direction:column;gap:2px;padding:3px">
+                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde">
+                                <div style="font-size:.44rem;color:#888">عنوان الزبون</div>
+                                <div style="font-size:.65rem;font-weight:700;line-height:1.2">${o.governorate ? o.governorate + ' - ' : ''}${o.custAddr || '-'}</div>
+                            </div>
+                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde">
+                                <div style="font-size:.44rem;color:#888">رقم التلفون</div>
+                                <div style="font-size:.85rem;font-weight:800;direction:ltr;text-align:right">${o.custMob || ''}</div>
+                            </div>
+                            <div style="background:#e6f4ed;border-radius:3px;padding:2px 5px;border:1.5px solid #1A6B4A">
+                                <div style="font-size:.44rem;color:#1A6B4A">القيمة شامل</div>
+                                <div style="font-size:1rem;font-weight:800;color:#1A6B4A">${o.price || 0} JOD</div>
+                            </div>
+                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde;flex:1">
+                                <div style="font-size:.44rem;color:#888">ملاحظات</div>
+                                <div style="font-size:.62rem;font-weight:600">${o.tags || ''}</div>
+                            </div>
+                            <!-- يمنع فتح الطرد -->
+                            <div style="background:#FFF0F0;border:1.5px solid #C02525;border-radius:3px;padding:2px 5px;text-align:center">
+                                <div style="font-size:.6rem;font-weight:800;color:#C02525;letter-spacing:.3px">⚠ يُمنع فتح الطرد</div>
                             </div>
                         </div>
 
                     </div>
 
                     <!-- الباركود -->
-                    <div style="text-align:center;padding:2px;border-top:1px solid #eee">
+                    <div style="text-align:center;padding:2px;border-top:1px solid #dde">
                         <svg id="${bcId}" style="max-width:100%;height:20px !important"></svg>
                     </div>
 
@@ -3562,6 +3593,7 @@ updateRetSizes(itemIdx) {
             { key: 'custName',     label: 'اسم الزبون',         icon: 'fa-user' },
             { key: 'mobile',       label: 'رقم الموبايل',       icon: 'fa-phone' },
             { key: 'location',     label: 'الموقع والعنوان',    icon: 'fa-map-marker-alt' },
+            { key: 'contact',      label: 'مكان التواصل',       icon: 'fa-comments' },
             { key: 'products',     label: 'المنتجات',           icon: 'fa-boxes' },
             { key: 'pricing',      label: 'السعر والمصدر',      icon: 'fa-tag' },
             { key: 'confirm',      label: 'مراجعة وتأكيد',      icon: 'fa-check-circle' },
@@ -3569,7 +3601,7 @@ updateRetSizes(itemIdx) {
     },
 
     startWizard() {
-        this._wiz = { step: 0, custName: '', mobile: '', governorate: 'العاصمة (عمّان)', addr: '', price: '', tags: '', pageName: '', entryUser: this.userName, items: [] };
+        this._wiz = { step: 0, custName: '', mobile: '', governorate: 'العاصمة (عمّان)', addr: '', price: '', tags: '', pageName: '', entryUser: this.userName, items: [], contactChannel: '', weightKg: '', lengthCm: '' };
         this.itemRows = [{}];
         document.getElementById('wiz-shell').style.display = 'flex';
         document.getElementById('wiz-success').style.display = 'none';
@@ -3597,9 +3629,10 @@ updateRetSizes(itemIdx) {
             case 0: this._wizStepName(body); break;
             case 1: this._wizStepMobile(body); break;
             case 2: this._wizStepLocation(body); break;
-            case 3: this._wizStepProducts(body); break;
-            case 4: this._wizStepPricing(body); break;
-            case 5: this._wizStepConfirm(body); break;
+            case 3: this._wizStepContact(body); break;
+            case 4: this._wizStepProducts(body); break;
+            case 5: this._wizStepPricing(body); break;
+            case 6: this._wizStepConfirm(body); break;
         }
 
         // Nav buttons
@@ -3692,6 +3725,56 @@ updateRetSizes(itemIdx) {
                 onkeydown="if(event.key==='Enter')app._wizNext()">`;
     },
 
+    _wizStepContact(body) {
+        const channels = [
+            { key: 'واتس اب',  label: 'واتساب',    icon: `<svg width="28" height="28" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.557 4.126 1.526 5.858L.057 23.888a.5.5 0 0 0 .617.6l6.162-1.615A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.694-.528-5.217-1.446l-.374-.224-3.878 1.016 1.033-3.772-.244-.389A9.952 9.952 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>`, color: '#25D366' },
+            { key: 'انستا',    label: 'انستغرام',  icon: `<svg width="28" height="28" viewBox="0 0 24 24"><defs><radialGradient id="ig2" cx="30%" cy="107%" r="150%"><stop offset="0%" stop-color="#fdf497"/><stop offset="45%" stop-color="#fd5949"/><stop offset="60%" stop-color="#d6249f"/><stop offset="90%" stop-color="#285AEB"/></radialGradient></defs><path fill="url(#ig2)" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>`, color: '#d6249f' },
+            { key: 'فيس بوك', label: 'فيسبوك',    icon: `<svg width="28" height="28" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>`, color: '#1877F2' },
+        ];
+        const cur = this._wiz.contactChannel;
+        body.innerHTML = this._wizLabel('مكان التواصل مع الزبون') + `
+            <div style="display:flex;gap:1rem;justify-content:center;margin-bottom:1.5rem" id="wiz_contact_btns">
+                ${channels.map(ch => `
+                    <button type="button" id="wiz_ch_${ch.key.replace(/\s/g,'_')}"
+                        onclick="app._wizSelectContact('${ch.key}')"
+                        style="display:flex;flex-direction:column;align-items:center;gap:.4rem;padding:.9rem 1.1rem;border-radius:14px;border:2.5px solid ${cur===ch.key ? ch.color : 'var(--border)'};background:${cur===ch.key ? ch.color+'15' : 'var(--paper-warm)'};cursor:pointer;transition:all .18s;min-width:80px">
+                        ${ch.icon}
+                        <span style="font-size:.78rem;font-weight:700;color:${cur===ch.key ? ch.color : 'var(--ink-mid)'}">${ch.label}</span>
+                    </button>`).join('')}
+            </div>
+            <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:.5rem">
+                <div style="font-size:.85rem;color:var(--ink-mid);font-weight:600;margin-bottom:.75rem">الوزن والطول <span style="color:var(--ink-mid);font-weight:400;font-size:.75rem">(اختياري)</span></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+                    <div>
+                        <label style="font-size:.78rem;color:var(--ink-mid);display:block;margin-bottom:.3rem">الوزن (kg)</label>
+                        <input type="number" id="wiz_weight" class="form-control-j" style="font-size:1rem;padding:.65rem .8rem"
+                            placeholder="مثال: 0.5" step="0.1" min="0" value="${this._wiz.weightKg}"
+                            onkeydown="if(event.key==='Enter')app._wizNext()">
+                    </div>
+                    <div>
+                        <label style="font-size:.78rem;color:var(--ink-mid);display:block;margin-bottom:.3rem">الطول (cm)</label>
+                        <input type="number" id="wiz_length" class="form-control-j" style="font-size:1rem;padding:.65rem .8rem"
+                            placeholder="مثال: 30" step="1" min="0" value="${this._wiz.lengthCm}"
+                            onkeydown="if(event.key==='Enter')app._wizNext()">
+                    </div>
+                </div>
+            </div>`;
+    },
+
+    _wizSelectContact(key) {
+        this._wiz.contactChannel = key;
+        // Re-render just the buttons highlight
+        const channels = { 'واتس اب': '#25D366', 'انستا': '#d6249f', 'فيس بوك': '#1877F2' };
+        Object.entries(channels).forEach(([k, color]) => {
+            const btn = document.getElementById('wiz_ch_' + k.replace(/\s/g,'_'));
+            if (!btn) return;
+            const selected = k === key;
+            btn.style.borderColor = selected ? color : 'var(--border)';
+            btn.style.background  = selected ? color + '15' : 'var(--paper-warm)';
+            btn.querySelector('span').style.color = selected ? color : 'var(--ink-mid)';
+        });
+    },
+
     _wizStepProducts(body) {
         body.innerHTML = `<div style="font-size:1.3rem;font-weight:800;color:var(--ink);margin-bottom:1.25rem"><i class="fas fa-boxes" style="color:var(--gold)"></i> المنتجات</div>
         <div id="eItemsList" style="display:block"></div>
@@ -3702,7 +3785,6 @@ updateRetSizes(itemIdx) {
     },
 
     _wizStepPricing(body) {
-        const pageOpts = this.pages.map(p => `<option value="${p.name}" ${this._wiz.pageName===p.name?'selected':''}>${p.name}</option>`).join('');
         const hasAutoPage = !!this._wiz.pageName;
         body.innerHTML = this._wizLabel('السعر والمصدر') + `
             <div style="display:flex;gap:.75rem;align-items:center;margin-bottom:1.25rem">
@@ -3711,12 +3793,20 @@ updateRetSizes(itemIdx) {
                     placeholder="0.00" step="0.5" value="${this._wiz.price}"
                     onkeydown="if(event.key==='Enter')app._wizNext()">
             </div>
-            <div class="select-wrapper" style="margin-bottom:.5rem">
-                <select id="wiz_page" class="form-control-j select-j" style="font-size:1.05rem">
-                    <option value="">اختر الصفحة المصدر...</option>${pageOpts}
-                </select>
+            <!-- اسم الصفحة — عرض فقط، مربوط بالصنف -->
+            <div style="margin-bottom:.75rem">
+                <div style="font-size:.78rem;color:var(--ink-mid);font-weight:600;margin-bottom:.3rem">اسم الصفحة</div>
+                <div style="display:flex;align-items:center;gap:.6rem;background:var(--paper-warm);border:1.5px solid var(--border);border-radius:10px;padding:.65rem 1rem;min-height:46px">
+                    ${hasAutoPage
+                        ? `<i class="fas fa-link" style="color:var(--gold);font-size:.8rem"></i>
+                           <span style="font-size:1rem;font-weight:800;color:var(--ink)">${this._wiz.pageName}</span>
+                           <span style="font-size:.68rem;color:var(--emerald);margin-right:auto"><i class="fas fa-check-circle"></i> تلقائي من الصنف</span>`
+                        : `<i class="fas fa-exclamation-circle" style="color:var(--ruby-light);font-size:.8rem"></i>
+                           <span style="font-size:.85rem;color:var(--ink-mid)">لم يُحدَّد — يرجى اختيار صنف مرتبط بصفحة</span>`
+                    }
+                </div>
+                <input type="hidden" id="wiz_page" value="${this._wiz.pageName}">
             </div>
-            ${hasAutoPage ? `<div style="font-size:.75rem;color:var(--emerald);margin-bottom:.6rem"><i class="fas fa-link"></i> تم اقتراح الصفحة تلقائياً من المنتج المختار</div>` : ''}
             <input type="text" id="wiz_tags" class="form-control-j" style="font-size:.95rem;padding:.7rem 1rem"
                 placeholder="ملاحظات / Tags (اختياري)..." value="${this._wiz.tags}">`;
     },
@@ -3740,6 +3830,9 @@ updateRetSizes(itemIdx) {
                     <div class="wiz-summary-row"><span class="wiz-summary-label">السعر</span><span class="wiz-summary-val" style="color:var(--emerald);font-weight:800">${this._wiz.price} JOD</span></div>
                     <div class="wiz-summary-row col-span-2"><span class="wiz-summary-label">العنوان</span><span class="wiz-summary-val">${this._wiz.addr}</span></div>
                     <div class="wiz-summary-row"><span class="wiz-summary-label">الصفحة</span><span class="wiz-summary-val">${this._wiz.pageName}</span></div>
+                    <div class="wiz-summary-row"><span class="wiz-summary-label">التواصل</span><span class="wiz-summary-val">${this._wiz.contactChannel || '—'}</span></div>
+                    ${this._wiz.weightKg ? `<div class="wiz-summary-row"><span class="wiz-summary-label">الوزن</span><span class="wiz-summary-val">${this._wiz.weightKg} kg</span></div>` : ''}
+                    ${this._wiz.lengthCm ? `<div class="wiz-summary-row"><span class="wiz-summary-label">الطول</span><span class="wiz-summary-val">${this._wiz.lengthCm} cm</span></div>` : ''}
                     ${this._wiz.tags ? `<div class="wiz-summary-row"><span class="wiz-summary-label">ملاحظات</span><span class="wiz-summary-val">${this._wiz.tags}</span></div>` : ''}
                 </div>
                 <div style="margin-top:.5rem;font-weight:700;font-size:.85rem;color:var(--ink-mid)">المنتجات:</div>
@@ -3765,6 +3858,11 @@ updateRetSizes(itemIdx) {
             this._wiz.governorate = gov;
             this._wiz.addr = addr;
         } else if (s === 3) {
+            // مكان التواصل — إجباري
+            if (!this._wiz.contactChannel) { this._wizErr('يرجى اختيار مكان التواصل مع الزبون'); return; }
+            this._wiz.weightKg = document.getElementById('wiz_weight')?.value.trim() || '';
+            this._wiz.lengthCm = document.getElementById('wiz_length')?.value.trim() || '';
+        } else if (s === 4) {
             // Collect items from rows
             const items = [];
             const rows = document.querySelectorAll('.ir-item');
@@ -3784,12 +3882,12 @@ updateRetSizes(itemIdx) {
             }
             if (items.length === 0) { this._wizErr('أضف منتجاً واحداً على الأقل'); return; }
             this._wiz.collectedItems = items;
-        } else if (s === 4) {
+        } else if (s === 5) {
             const price = parseFloat(document.getElementById('wiz_price')?.value);
-            const page  = document.getElementById('wiz_page')?.value;
+            const page  = document.getElementById('wiz_page')?.value || this._wiz.pageName;
             const tags  = document.getElementById('wiz_tags')?.value.trim() || '';
             if (!price || price <= 0) { this._wizErr('يرجى إدخال السعر'); return; }
-            if (!page) { this._wizErr('يرجى اختيار الصفحة المصدر'); return; }
+            if (!page) { this._wizErr('لم يتم تحديد الصفحة — يرجى اختيار صنف مرتبط بصفحة'); return; }
             this._wiz.price = price;
             this._wiz.pageName = page;
             this._wiz.tags = tags;
@@ -3817,7 +3915,10 @@ updateRetSizes(itemIdx) {
             itemId: items[0].itemId, itemName: items[0].itemName,
             itemColor: items[0].itemColor, size: items[0].size, exactKey: items[0].exactKey, qty: items[0].qty,
             items, price: w.price, currency: 'JOD',
-            pageName: w.pageName, entryUser, tags: w.tags, status: 'new'
+            pageName: w.pageName, entryUser, tags: w.tags, status: 'new',
+            contactChannel: w.contactChannel || '',
+            weightKg: w.weightKg || '',
+            lengthCm: w.lengthCm || '',
         };
 
         const btn = document.getElementById('wiz-nav')?.querySelector('button:last-child');
