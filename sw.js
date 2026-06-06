@@ -1,11 +1,9 @@
 // ============================================================
 // sw.js — Jawaher Service Worker
-// Caches app shell for offline use
 // ============================================================
 
-const CACHE_NAME = 'jawaher-v3';
+const CACHE_NAME = 'jawaher-v2';
 
-// App shell files to cache
 const SHELL = [
     './',
     './index.html',
@@ -19,56 +17,63 @@ const SHELL = [
     'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js',
 ];
 
-// ── Install: cache app shell ──────────────────────────────
+// ── Install ──────────────────────────────────────────────────
 self.addEventListener('install', e => {
     e.waitUntil(
-        caches.open(CACHE_NAME).then(cache => {
-            // Cache what we can; ignore failures for CDN assets
-            return Promise.allSettled(SHELL.map(url => cache.add(url).catch(() => {})));
-        }).then(() => self.skipWaiting())
+        caches.open(CACHE_NAME)
+            .then(cache => Promise.allSettled(SHELL.map(url => cache.add(url).catch(() => {}))))
+            .then(() => self.skipWaiting())
     );
 });
 
-// ── Activate: clean old caches ────────────────────────────
+// ── Activate: مسح الكاش القديم ──────────────────────────────
 self.addEventListener('activate', e => {
     e.waitUntil(
-        caches.keys().then(keys =>
-            Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-        ).then(() => self.clients.claim())
+        caches.keys()
+            .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+            .then(() => self.clients.claim())
     );
 });
 
-// ── Fetch: cache-first for shell, network-first for Firebase ─
+// ── Fetch: Network-First (يتحقق من السيرفر دايماً) ──────────
 self.addEventListener('fetch', e => {
     const url = new URL(e.request.url);
 
-    // Let Firebase / Google APIs go through the network always
+    // Firebase وGoogle APIs: شبكة فقط بدون تدخل
     if (
         url.hostname.includes('firebase') ||
         url.hostname.includes('googleapis.com') ||
         url.hostname.includes('gstatic.com') ||
         url.hostname.includes('wa.me')
+    ) return;
+
+    // CDN assets (fonts, icons, xlsx): cache-first لأنها ما بتتغير
+    if (
+        url.hostname.includes('cdnjs.cloudflare.com') ||
+        url.hostname.includes('cdn.jsdelivr.net') ||
+        url.hostname.includes('fonts.googleapis.com') ||
+        url.hostname.includes('fonts.gstatic.com')
     ) {
-        return; // default browser behavior (network)
+        e.respondWith(
+            caches.match(e.request).then(cached => cached || fetch(e.request))
+        );
+        return;
     }
 
-    // For app shell: cache-first, then network fallback
+    // ملفات الموقع (app.js, index.html, style.css...): Network-First
+    // → يجرب السيرفر أولاً → إذا نجح يحدّث الكاش → إذا فشل يرجع الكاش
     e.respondWith(
-        caches.match(e.request).then(cached => {
-            if (cached) return cached;
-            return fetch(e.request).then(response => {
-                // Cache successful GET responses
+        fetch(e.request)
+            .then(response => {
                 if (e.request.method === 'GET' && response.status === 200) {
                     const clone = response.clone();
                     caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
                 }
                 return response;
-            }).catch(() => {
-                // Offline fallback for navigation requests
-                if (e.request.mode === 'navigate') {
-                    return caches.match('./index.html');
-                }
-            });
-        })
+            })
+            .catch(() => caches.match(e.request).then(cached => {
+                if (cached) return cached;
+                if (e.request.mode === 'navigate') return caches.match('./index.html');
+            }))
     );
 });
