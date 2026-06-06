@@ -74,6 +74,10 @@
             </div>
             <h2 class="text-center mb-1">مؤسسة شادي الملكاوي</h2>
             <p class="text-center mb-4" style="font-size:.85rem;">نظام إدارة المبيعات والمستودع</p>
+
+            <!-- ── Saved Accounts ── -->
+            <div id="savedAccountsList" style="display:none;margin-bottom:1rem;"></div>
+
             <form onsubmit="event.preventDefault(); window.app.login();" autocomplete="on">
                 <div class="auth-field">
                     <i class="fas fa-user auth-field-icon"></i>
@@ -85,6 +89,22 @@
                     <input type="password" id="loginPass" name="password" class="auth-input"
                         placeholder="كلمة المرور" autocomplete="current-password">
                 </div>
+
+                <!-- ── Remember Me ── -->
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;cursor:pointer;" onclick="document.getElementById('rememberMe').click()">
+                    <div id="rememberMeBox" style="
+                        width:20px;height:20px;border-radius:6px;flex-shrink:0;
+                        border:1.5px solid rgba(201,168,76,.4);
+                        background:rgba(255,255,255,.05);
+                        display:flex;align-items:center;justify-content:center;
+                        transition:all .2s;
+                    ">
+                        <i class="fas fa-check" style="color:#C9A84C;font-size:.7rem;display:none;"></i>
+                    </div>
+                    <input type="checkbox" id="rememberMe" style="display:none;" onchange="app.toggleRememberMe()">
+                    <span style="color:rgba(255,255,255,.55);font-size:.85rem;user-select:none;">تذكّرني على هذا الجهاز</span>
+                </div>
+
                 <button type="submit" class="btn-auth">دخول &nbsp;<i class="fas fa-arrow-left"></i></button>
             </form>
         </div>

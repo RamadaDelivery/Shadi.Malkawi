@@ -32,6 +32,7 @@ window.app = {
     nimSizeRows: [],
     sysUsers: {},
     _fbReady: { orders: false, warehouse: false, returns: false, purchases: false },
+    _listenersStarted: false,
     auditData: {},
     customColors: [],   // ألوان مخصصة من Firebase تُضاف لـ COLORS_AR
 
@@ -73,6 +74,12 @@ window.app = {
 
         this.user = u; this.role = ud.role; this.userName = ud.name;
         this.userPerms = ud.perms;
+
+        // حفظ الحساب إذا Remember Me مفعّل
+        if (document.getElementById('rememberMe')?.checked) {
+            this._saveAccount(u, p);
+        }
+
 localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name: ud.name }));        document.getElementById('authScreen').classList.remove('visible');
         document.getElementById('appContainer').style.display = 'block';
         document.getElementById('userName').textContent = ud.name;
@@ -96,11 +103,13 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
     },
 
     logout() {
-        this.user = null;
+        this.user = null; this.role = null; this.userName = null; this.userPerms = {};
         localStorage.removeItem('shmSession');
         document.getElementById('appContainer').style.display = 'none';
         document.getElementById('authScreen').classList.add('visible');
+        document.getElementById('loginUser').value = '';
         document.getElementById('loginPass').value = '';
+        app.renderSavedAccounts();
     },
 
   applyPermissions() {
@@ -184,6 +193,91 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
             this.toast('تم تعطيل حسابك. سيتم تسجيل الخروج.', 'error');
             setTimeout(() => this.logout(), 2000);
         }
+    },
+
+    // ============ REMEMBER ME / SAVED ACCOUNTS ============
+    _getSavedAccounts() {
+        try { return JSON.parse(localStorage.getItem('shmSavedAccounts') || '[]'); }
+        catch { return []; }
+    },
+    _saveAccount(username, password) {
+        const accounts = this._getSavedAccounts().filter(a => a.u !== username);
+        accounts.unshift({ u: username, p: password, ts: Date.now() });
+        localStorage.setItem('shmSavedAccounts', JSON.stringify(accounts.slice(0, 5)));
+    },
+    _removeAccount(username) {
+        const accounts = this._getSavedAccounts().filter(a => a.u !== username);
+        localStorage.setItem('shmSavedAccounts', JSON.stringify(accounts));
+        this.renderSavedAccounts();
+    },
+    toggleRememberMe() {
+        const cb  = document.getElementById('rememberMe');
+        const box = document.getElementById('rememberMeBox');
+        const icon = box.querySelector('i');
+        if (cb.checked) {
+            box.style.background = 'rgba(201,168,76,.2)';
+            box.style.borderColor = '#C9A84C';
+            icon.style.display = 'block';
+        } else {
+            box.style.background = 'rgba(255,255,255,.05)';
+            box.style.borderColor = 'rgba(201,168,76,.4)';
+            icon.style.display = 'none';
+        }
+    },
+    renderSavedAccounts() {
+        const accounts = this._getSavedAccounts();
+        const container = document.getElementById('savedAccountsList');
+        if (!container) return;
+        if (!accounts.length) { container.style.display = 'none'; return; }
+        container.style.display = 'block';
+        container.innerHTML = `
+            <div style="font-size:.78rem;color:rgba(255,255,255,.4);margin-bottom:.5rem;text-align:right;">الحسابات المحفوظة</div>
+            <div style="display:flex;flex-direction:column;gap:.4rem;">
+                ${accounts.map(a => `
+                    <div style="
+                        display:flex;align-items:center;gap:.6rem;
+                        background:rgba(255,255,255,.05);
+                        border:1px solid rgba(201,168,76,.15);
+                        border-radius:12px;padding:.55rem .9rem;
+                        cursor:pointer;transition:background .2s;
+                    " onmouseenter="this.style.background='rgba(201,168,76,.08)'"
+                       onmouseleave="this.style.background='rgba(255,255,255,.05)'"
+                       onclick="app.quickLogin('${a.u}','${a.p}')">
+                        <div style="
+                            width:32px;height:32px;border-radius:50%;flex-shrink:0;
+                            background:linear-gradient(135deg,#C9A84C,#9A7A2E);
+                            display:flex;align-items:center;justify-content:center;
+                            font-weight:800;font-size:.85rem;color:#1A1A2E;
+                        ">${a.u[0].toUpperCase()}</div>
+                        <span style="flex:1;color:rgba(255,255,255,.8);font-size:.88rem;">${a.u}</span>
+                        <button onclick="event.stopPropagation();app._removeAccount('${a.u}')" style="
+                            background:none;border:none;color:rgba(255,255,255,.3);
+                            cursor:pointer;font-size:.8rem;padding:.2rem .4rem;
+                            border-radius:6px;transition:color .2s;
+                        " onmouseenter="this.style.color='#e74c3c'"
+                           onmouseleave="this.style.color='rgba(255,255,255,.3)'">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+            <div style="text-align:center;margin-top:.6rem;">
+                <span style="font-size:.75rem;color:rgba(255,255,255,.25);cursor:pointer;"
+                    onclick="app.loginWithOther()">
+                    <i class="fas fa-plus" style="font-size:.65rem;"></i> تسجيل دخول بحساب آخر
+                </span>
+            </div>
+        `;
+    },
+    async quickLogin(username, password) {
+        document.getElementById('loginUser').value = username;
+        document.getElementById('loginPass').value = password;
+        await this.login();
+    },
+    loginWithOther() {
+        document.getElementById('loginUser').value = '';
+        document.getElementById('loginPass').value = '';
+        document.getElementById('loginUser').focus();
     },
 
     // ============ DARK MODE ============
@@ -293,6 +387,8 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
     },
 
     startListeners() {
+        if (this._listenersStarted) return;
+        this._listenersStarted = true;
         // ── Load cached data immediately for instant UI ────────
         this._cacheInit().then(async () => {
             const cached = {
@@ -4330,6 +4426,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     app.applyDark();
     app.initKeys();
+    app.renderSavedAccounts();
 
     // ── Register Service Worker (offline + cache) ─────────────
     if ('serviceWorker' in navigator) {
