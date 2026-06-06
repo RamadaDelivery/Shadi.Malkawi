@@ -3,7 +3,7 @@
 // Caches app shell for offline use
 // ============================================================
 
-const CACHE_NAME = 'jawaher-v2';
+const CACHE_NAME = 'jawaher-v3';
 
 // App shell files to cache
 const SHELL = [
