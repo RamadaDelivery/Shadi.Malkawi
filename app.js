@@ -31,6 +31,7 @@ window.app = {
     logsData: {},
     nimSizeRows: [],
     sysUsers: {},
+    _fbReady: { orders: false, warehouse: false, returns: false, purchases: false },
     auditData: {},
     customColors: [],   // ألوان مخصصة من Firebase تُضاف لـ COLORS_AR
 
@@ -281,6 +282,16 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
         } catch(e) { /* keep in queue */ }
     },
 
+    _hideSyncOverlay() {
+        if (Object.values(this._fbReady).every(Boolean)) {
+            const overlay = document.getElementById('syncOverlay');
+            if (overlay) {
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.remove(), 400);
+            }
+        }
+    },
+
     startListeners() {
         // ── Load cached data immediately for instant UI ────────
         this._cacheInit().then(async () => {
@@ -304,21 +315,25 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
         onValue(ordersRef, snap => {
             this.orders = snap.val() || {};
             this._cacheSet('orders', this.orders);
+            this._fbReady.orders = true; this._hideSyncOverlay();
             this.updateCurrentPage(); this.updateRItemFilter();
         });
         onValue(warehouseRef, snap => {
             this.warehouse = snap.val() || {};
             this._cacheSet('warehouse', this.warehouse);
+            this._fbReady.warehouse = true; this._hideSyncOverlay();
             this.updateItemSelects(); this.updateCurrentPage();
         });
         onValue(returnsRef, snap => {
             this.returns = snap.val() || {};
             this._cacheSet('returns', this.returns);
+            this._fbReady.returns = true; this._hideSyncOverlay();
             this.updateCurrentPage();
         });
         onValue(purchasesRef, snap => {
             this.purchases = snap.val() || {};
             this._cacheSet('purchases', this.purchases);
+            this._fbReady.purchases = true; this._hideSyncOverlay();
             this.updateCurrentPage();
         });
         onValue(defPagesRef, snap => {
