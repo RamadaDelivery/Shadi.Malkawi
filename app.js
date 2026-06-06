@@ -54,19 +54,20 @@ window.app = {
         const u = document.getElementById('loginUser').value.trim().toLowerCase();
         const p = document.getElementById('loginPass').value;
 
-        // 1. Try Firebase dynamic users first
+        // 1. Check constants.js first (built-in accounts — always available, no Firebase delay)
         let ud = null;
-        const fbUser = this.sysUsers[u];
-        if (fbUser) {
+        const cu = USERS[u];
+        if (cu) {
+            if (cu.pass !== p) { this.toast('بيانات الدخول غير صحيحة', 'error'); return; }
+            ud = { role: cu.role, name: cu.name, perms: {} };
+        } else {
+            // 2. Try Firebase dynamic users
+            const fbUser = this.sysUsers[u];
+            if (!fbUser) { this.toast('بيانات الدخول غير صحيحة', 'error'); return; }
             if (fbUser.disabled) { this.toast('هذا الحساب معطّل. تواصل مع المدير', 'error'); return; }
             const ok = await this._passMatch(p, fbUser.passHash);
             if (!ok) { this.toast('بيانات الدخول غير صحيحة', 'error'); return; }
             ud = { role: fbUser.role, name: fbUser.name, perms: fbUser.perms || {} };
-        } else {
-            // 2. Fallback to constants.js (built-in accounts)
-            const cu = USERS[u];
-            if (!cu || cu.pass !== p) { this.toast('بيانات الدخول غير صحيحة', 'error'); return; }
-            ud = { role: cu.role, name: cu.name, perms: {} };
         }
 
         this.user = u; this.role = ud.role; this.userName = ud.name;
