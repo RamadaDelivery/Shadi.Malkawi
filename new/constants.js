@@ -6,7 +6,6 @@ export const USERS = {
     admin:    { pass: '2026', role: 'Admin',    name: 'المدير العام' },
     basel:    { pass: '2026', role: 'Admin',    name: 'باسل'          },
     user:     { pass: '1234', role: 'User',     name: 'موظف إدخال'   },
-    shadi:     { pass: '123456', role: 'User',     name: 'موظف إدخال'   },
     delivery: { pass: 'del',  role: 'Delivery', name: 'عامل التوصيل' }
 };
 
