@@ -386,71 +386,104 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
         }
     },
 
+    // إخفاء syncOverlay قسراً بعد مهلة حتى لا يبقى إلى الأبد
+    _forceSyncTimeout() {
+        setTimeout(() => {
+            const overlay = document.getElementById('syncOverlay');
+            if (overlay) {
+                console.warn('[SHM] syncOverlay timeout — forcing hide. fbReady:', JSON.stringify(this._fbReady));
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.remove(), 400);
+                // تعيين البيانات المفقودة إلى كائنات فارغة حتى لا تبقى الصفحات فارغة
+                if (!this._fbReady.orders)    { this.orders    = this.orders    || {}; }
+                if (!this._fbReady.warehouse) { this.warehouse = this.warehouse || {}; }
+                if (!this._fbReady.returns)   { this.returns   = this.returns   || {}; }
+                if (!this._fbReady.purchases) { this.purchases = this.purchases || {}; }
+                this.updateCurrentPage();
+                this.updateItemSelects();
+            }
+        }, 8000); // 8 ثوانٍ كحد أقصى
+    },
+
     startListeners() {
         if (this._listenersStarted) return;
         this._listenersStarted = true;
-        // ── Load cached data immediately for instant UI ────────
+
+        // ── إخفاء syncOverlay قسراً بعد 8 ثوانٍ كحد أقصى ────
+        this._forceSyncTimeout();
+
+        // ── تحميل البيانات المحفوظة مؤقتاً للعرض الفوري ──────
         this._cacheInit().then(async () => {
             const cached = {
-                orders: await this._cacheGet('orders'),
+                orders:    await this._cacheGet('orders'),
                 warehouse: await this._cacheGet('warehouse'),
-                returns: await this._cacheGet('returns'),
+                returns:   await this._cacheGet('returns'),
                 purchases: await this._cacheGet('purchases'),
-                pages: await this._cacheGet('pages'),
+                pages:     await this._cacheGet('pages'),
             };
             if (cached.orders)    { this.orders    = cached.orders;    this.updateCurrentPage(); this.updateRItemFilter(); }
-            if (cached.warehouse) { this.warehouse  = cached.warehouse; this.updateItemSelects(); this.updateCurrentPage(); }
-            if (cached.returns)   { this.returns    = cached.returns;   this.updateCurrentPage(); }
-            if (cached.purchases) { this.purchases  = cached.purchases; this.updateCurrentPage(); }
-            if (cached.pages) {
-                this.pages = cached.pages;
-                this.updatePageSelect();
-            }
+            if (cached.warehouse) { this.warehouse = cached.warehouse; this.updateItemSelects(); this.updateCurrentPage(); }
+            if (cached.returns)   { this.returns   = cached.returns;   this.updateCurrentPage(); }
+            if (cached.purchases) { this.purchases = cached.purchases; this.updateCurrentPage(); }
+            if (cached.pages)     { this.pages     = cached.pages;     this.updatePageSelect(); }
         });
+
+        const _onErr = (name) => (err) => {
+            console.error(`[SHM] Firebase listener error (${name}):`, err);
+            this._fbReady[name] = true; // اعتبره جاهزاً حتى لا يبقى الـ overlay
+            this._hideSyncOverlay();
+        };
 
         onValue(ordersRef, snap => {
             this.orders = snap.val() || {};
             this._cacheSet('orders', this.orders);
             this._fbReady.orders = true; this._hideSyncOverlay();
             this.updateCurrentPage(); this.updateRItemFilter();
-        });
+        }, _onErr('orders'));
+
         onValue(warehouseRef, snap => {
             this.warehouse = snap.val() || {};
             this._cacheSet('warehouse', this.warehouse);
             this._fbReady.warehouse = true; this._hideSyncOverlay();
             this.updateItemSelects(); this.updateCurrentPage();
-        });
+        }, _onErr('warehouse'));
+
         onValue(returnsRef, snap => {
             this.returns = snap.val() || {};
             this._cacheSet('returns', this.returns);
             this._fbReady.returns = true; this._hideSyncOverlay();
             this.updateCurrentPage();
-        });
+        }, _onErr('returns'));
+
         onValue(purchasesRef, snap => {
             this.purchases = snap.val() || {};
             this._cacheSet('purchases', this.purchases);
             this._fbReady.purchases = true; this._hideSyncOverlay();
             this.updateCurrentPage();
-        });
+        }, _onErr('purchases'));
+
         onValue(defPagesRef, snap => {
             this.pages = snap.val() ? Object.entries(snap.val()).map(([id, v]) => ({ id, name: v.name })) : [];
             this._cacheSet('pages', this.pages);
             this.updatePageSelect(); this.renderDefinitions();
         });
+
         onValue(defUsersRef, snap => {
             this.entryUsers = snap.val() ? Object.entries(snap.val()).map(([id, v]) => ({ id, name: v.name })) : [];
             this.updateEntryUserSelect(); this.renderDefinitions();
         });
+
         // ── System Users listener (real-time RBAC + revocation) ──
         onValue(sysUsersRef, snap => {
             this.sysUsers = snap.val() || {};
             this._checkSessionValid();
-            this.updateEntryUserSelect(); // refresh entry user dropdown
+            this.updateEntryUserSelect();
             const active = document.querySelector('.page.active');
             if (active?.id === 'page-users' && this.role === 'Admin') this.renderUsersPage();
         });
-       if (this.role === 'Admin') {
-    onValue(logsRef, snap => { this.logsData = snap.val() || {}; this.updateCurrentPage(); });
+
+        if (this.role === 'Admin') {
+            onValue(logsRef, snap => { this.logsData = snap.val() || {}; this.updateCurrentPage(); });
         }
 
         // ── Online/offline detection + queue flush ─────────────
@@ -461,7 +494,8 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
         window.addEventListener('offline', () => {
             this.toast('انقطع الاتصال — سيتم حفظ العمليات ومزامنتها لاحقاً', 'warning');
         });
-        // ── Audit trail listener (Admin only) ────────────────
+
+        // ── Audit trail listener (Admin only) ─────────────────
         if (this.role === 'Admin') {
             onValue(ref(db, 'jawaher_audit'), snap => {
                 this.auditData = snap.val() || {};
@@ -470,15 +504,7 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
             });
         }
 
-        // ── Custom Colors listener ────────────────────────────
-        onValue(customColorsRef, snap => {
-            const data = snap.val() || {};
-            this.customColors = Object.values(data).map(c => ({
-                name: c.name, hex: c.hex, border: c.border || c.hex, custom: true
-            }));
-        });
-
-        // ── Custom Colors listener ───────────────────────
+        // ── Custom Colors listener (مرة واحدة فقط) ───────────
         onValue(customColorsRef, snap => {
             const data = snap.val() || {};
             this.customColors = Object.entries(data).map(([key, c]) => ({
