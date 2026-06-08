@@ -698,7 +698,7 @@
             <div id="page-definitions" class="page">
                 <div class="page-header">
                     <h1 class="page-title">التعريفات</h1>
-                    <p class="page-subtitle">إدارة الصفحات والمدخلين</p>
+                    <p class="page-subtitle">إدارة الصفحات والمدخلين والألوان</p>
                 </div>
                 <div class="row g-4">
                     <div class="col-md-6">
@@ -725,6 +725,41 @@
                                 المدخلون يُدارون الآن من صفحة
                                 <strong style="color:var(--gold)">المستخدمون والصلاحيات</strong>
                                 <br><span style="font-size:.75rem">كل مستخدم مسجّل في النظام يظهر تلقائياً كمدخل</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── قسم الألوان المخصصة ── -->
+                    <div class="col-12">
+                        <div class="card-j p-4">
+                            <div style="font-weight:800;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+                                <div>
+                                    <i class="fas fa-palette" style="color:var(--gold)"></i> الألوان المخصصة
+                                    <span style="font-size:.75rem;color:var(--ink-mid);font-weight:400;margin-right:.5rem">ألوان إضافية خارج القائمة الافتراضية</span>
+                                </div>
+                            </div>
+                            <!-- إضافة لون جديد -->
+                            <div style="background:var(--paper-warm);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
+                                <div style="font-size:.82rem;font-weight:700;color:var(--ink-mid);margin-bottom:.6rem">
+                                    <i class="fas fa-plus-circle" style="color:var(--gold)"></i> إضافة لون جديد
+                                </div>
+                                <div class="d-flex gap-2 align-items-center flex-wrap">
+                                    <input type="text" id="defColorName" class="form-control-j" placeholder="اسم اللون (مثال: بيج فاتح)" style="flex:1;min-width:160px">
+                                    <div style="display:flex;align-items:center;gap:.4rem">
+                                        <input type="color" id="defColorHex" value="#C9A84C"
+                                            style="width:48px;height:42px;border:2px solid var(--border);border-radius:10px;cursor:pointer;padding:2px;background:transparent">
+                                        <span style="font-size:.78rem;color:var(--ink-mid)">اختر اللون</span>
+                                    </div>
+                                    <button class="btn-j btn-gold" onclick="app.addCustomColorDef()" style="white-space:nowrap">
+                                        <i class="fas fa-plus"></i> إضافة
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- قائمة الألوان المخصصة -->
+                            <div id="customColorsList">
+                                <div style="color:var(--ink-mid);font-size:.85rem;text-align:center;padding:1rem">
+                                    جاري التحميل...
+                                </div>
                             </div>
                         </div>
                     </div>
