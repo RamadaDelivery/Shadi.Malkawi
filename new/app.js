@@ -4,7 +4,7 @@
 
 import {
     db, ordersRef, logsRef, warehouseRef, returnsRef,
-    purchasesRef, defPagesRef, defUsersRef, sysUsersRef, customColorsRef, customColorsRef,
+    purchasesRef, defPagesRef, defUsersRef, sysUsersRef, customColorsRef,
     ref, push, onValue, update, remove, get
 } from "./firebase-config.js";
 
