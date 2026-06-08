@@ -517,6 +517,17 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
         setTimeout(() => this._offlineQueueFlush(), 3000);
     },
 
+    // ── مساعد: إرجاع قيمة HEX للون بالاسم العربي ─────────────
+    _colorHex(name) {
+        if (!name) return null;
+        // البحث أولاً في الألوان المخصصة من Firebase
+        const custom = (this.customColors || []).find(c => c.name === name);
+        if (custom) return custom.hex;
+        // ثم في COLORS_AR الثابتة
+        const found = COLORS_AR.find(c => c.name === name);
+        return found ? found.hex : null;
+    },
+
     updateCurrentPage() {
         const active = document.querySelector('.page.active');
         if (!active) return;
