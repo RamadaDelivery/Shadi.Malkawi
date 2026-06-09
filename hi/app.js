@@ -478,6 +478,15 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
             }));
         });
 
+        // ── Custom Colors listener ───────────────────────
+        onValue(customColorsRef, snap => {
+            const data = snap.val() || {};
+            this.customColors = Object.entries(data).map(([key, c]) => ({
+                name: c.name, hex: c.hex, border: c.border || c.hex, custom: true, _key: key
+            }));
+            this.renderCustomColorsDef();
+        });
+
         // Flush any pending queue on startup
         setTimeout(() => this._offlineQueueFlush(), 3000);
     },
@@ -567,7 +576,70 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
 
     async delDef(type, id) {
         if (!confirm('حذف هذا العنصر؟')) return;
-        await remove(ref(db, `jawaher_def/${type}/${id}`));
+        const pathMap = { pages: 'jawaher_defPages', entryUsers: 'jawaher_defUsers' };
+        await remove(ref(db, `${pathMap[type] || 'jawaher_def/' + type}/${id}`));
+    },
+
+    async addCustomColorDef() {
+        const name = document.getElementById('defColorName')?.value.trim();
+        const hex  = document.getElementById('defColorHex')?.value || '#000000';
+        if (!name) { this.toast('يرجى إدخال اسم اللون', 'error'); return; }
+        if (this._allColors().find(c => c.name === name)) { this.toast('هذا الاسم موجود مسبقاً', 'error'); return; }
+        await push(customColorsRef, { name, hex, border: hex, custom: true });
+        document.getElementById('defColorName').value = '';
+        this.toast(`تم إضافة اللون "${name}" ✓`, 'success');
+    },
+
+    async renameCustomColor(firebaseKey, oldName) {
+        const newName = prompt(`الاسم الجديد للون "${oldName}":`, oldName);
+        if (!newName || newName.trim() === oldName) return;
+        if (this._allColors().find(c => c.name === newName.trim())) { this.toast('هذا الاسم موجود مسبقاً', 'error'); return; }
+        await update(ref(db, `jawaher_custom_colors/${firebaseKey}`), { name: newName.trim() });
+        this.toast(`تم تغيير الاسم إلى "${newName.trim()}" ✓`, 'success');
+    },
+
+    async deleteCustomColor(firebaseKey, colorName) {
+        const usedIn = [];
+        Object.values(this.warehouse).forEach(w => {
+            const hasStock = Object.entries(w.sizes || {}).some(([k, q]) => {
+                if (q <= 0) return false;
+                const kColor = k.includes(' - ') ? k.split(' - ').slice(1).join(' - ') : (w.color || '');
+                return kColor === colorName;
+            });
+            if (hasStock) usedIn.push(w.name);
+        });
+        if (usedIn.length > 0) {
+            this.toast(`⚠ لا يمكن حذف "${colorName}" — مستخدم في: ${usedIn.slice(0,3).join('، ')}${usedIn.length>3?'...':''}`, 'error');
+            return;
+        }
+        if (!confirm(`حذف اللون "${colorName}" نهائياً؟`)) return;
+        await remove(ref(db, `jawaher_custom_colors/${firebaseKey}`));
+        this.toast(`تم حذف اللون "${colorName}"`, 'success');
+    },
+
+    renderCustomColorsDef() {
+        const container = document.getElementById('customColorsList');
+        if (!container) return;
+        if (!this.customColors || this.customColors.length === 0) {
+            container.innerHTML = '<div style="color:var(--ink-mid);font-size:.85rem;text-align:center;padding:1rem">لا توجد ألوان مخصصة مضافة</div>';
+            return;
+        }
+        container.innerHTML = this.customColors.map(c => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:.55rem 0;border-bottom:1px solid var(--border-2)">
+                <div style="display:flex;align-items:center;gap:.6rem">
+                    <span style="width:22px;height:22px;border-radius:6px;background:${c.hex};border:1.5px solid var(--border);display:inline-block;flex-shrink:0"></span>
+                    <span style="font-weight:700;font-size:.9rem">${c.name}</span>
+                    <span style="font-size:.72rem;color:var(--ink-mid);font-family:monospace">${c.hex}</span>
+                </div>
+                <div style="display:flex;gap:.4rem">
+                    <button class="btn-j btn-ghost btn-xs-j" onclick="app.renameCustomColor('${c._key}','${c.name}')" title="تغيير الاسم">
+                        <i class="fas fa-pencil-alt" style="color:var(--gold)"></i>
+                    </button>
+                    <button class="btn-j btn-ruby btn-xs-j" onclick="app.deleteCustomColor('${c._key}','${c.name}')" title="حذف">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>`).join('');
     },
 
     renderDefinitions() {
@@ -579,8 +651,9 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
             </div>`;
         const pg = document.getElementById('pagesList');
         const us = document.getElementById('usersList');
-      if (pg) pg.innerHTML = this.pages.length ? this.pages.map(p => mkItem(p.name, 'pages', p.id)).join('') : '<div style="color:var(--ink-mid); font-size:0.85rem;">لا توجد صفحات معرفة</div>';
-    if (us) us.innerHTML = this.entryUsers.length ? this.entryUsers.map(u => mkItem(u.name, 'entryUsers', u.id)).join('') : '<div style="color:var(--ink-mid); font-size:0.85rem;">لا يوجد مدخلين معرفين</div>';
+        if (pg) pg.innerHTML = this.pages.length ? this.pages.map(p => mkItem(p.name, 'pages', p.id)).join('') : '<div style="color:var(--ink-mid); font-size:0.85rem;">لا توجد صفحات معرفة</div>';
+        if (us) us.innerHTML = this.entryUsers.length ? this.entryUsers.map(u => mkItem(u.name, 'entryUsers', u.id)).join('') : '<div style="color:var(--ink-mid); font-size:0.85rem;">لا يوجد مدخلين معرفين</div>';
+        this.renderCustomColorsDef();
     },
 
     // ============ COUNTRY ============
@@ -624,33 +697,26 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
         const popup = document.createElement('div');
         popup.className = 'color-picker-popup';
 
-        // filter to available colors if this is an item row color picker
         const targetEl = document.getElementById(targetId);
         const availableColors = targetEl?.dataset?.availableColors ? JSON.parse(targetEl.dataset.availableColors) : null;
 
-        // ── دالة مساعدة: تطبيق اللون المختار على الحقل ────────
         const applyColor = (c) => {
             const target = document.getElementById(targetId);
             if (target) {
                 target.value = c.name;
                 target.dataset.hex = c.hex;
-                // ── تحديث الـ preview المرئي لحقول ir_color ─────
                 if (targetId.startsWith('ir_color_')) {
-                    const idx = target.dataset.idx;
-                    const preview = document.getElementById(`ir_color_preview_${idx}`);
+                    const rowIdx = target.dataset.idx;
+                    const preview = document.getElementById(`ir_color_preview_${rowIdx}`);
                     if (preview) {
-                        const bgStyle = c.rainbow
-                            ? 'linear-gradient(135deg,#ff0000,#ff7700,#ffff00,#00ff00,#0000ff,#8b00ff)'
-                            : c.hex;
-                        preview.innerHTML = `
-                            <span style="width:18px;height:18px;border-radius:5px;background:${bgStyle};border:1.5px solid rgba(0,0,0,.12);flex-shrink:0;display:inline-block"></span>
+                        const bg = c.rainbow ? 'linear-gradient(135deg,#ff0000,#ff7700,#ffff00,#00ff00,#0000ff,#8b00ff)' : c.hex;
+                        preview.innerHTML = `<span style="width:18px;height:18px;border-radius:5px;background:${bg};border:1.5px solid rgba(0,0,0,.12);flex-shrink:0;display:inline-block"></span>
                             <span style="font-size:.82rem;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</span>`;
                         preview.style.borderColor = c.rainbow ? 'transparent' : c.hex;
                         preview.style.boxShadow = `0 0 0 2px ${c.hex}22`;
                     }
-                    app.loadRowSizes(parseInt(idx), null, c.name);
+                    app.loadRowSizes(parseInt(rowIdx), null, c.name);
                 } else {
-                    // الحقول الأخرى: border ملون كما كان
                     if (c.rainbow) {
                         target.style.borderRight = '4px solid transparent';
                         target.style.borderImage = 'linear-gradient(#ff0000,#ff7700,#ffff00,#00ff00,#0000ff,#8b00ff) 1';
@@ -661,144 +727,101 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
                 }
                 if (targetId.startsWith('psc_')) {
                     const i = parseInt(targetId.split('_')[1]);
-                    if (app.pSizeData && app.pSizeData[i]) {
-                        app.pSizeData[i].color = c.name;
-                        app.pSizeData[i].colorHex = c.hex;
-                    }
+                    if (app.pSizeData && app.pSizeData[i]) { app.pSizeData[i].color = c.name; app.pSizeData[i].colorHex = c.hex; }
                 }
                 if (targetId === 'asColor') {
-                    const itemId = document.querySelector('[onclick*="confirmAddStock"]')?.getAttribute('onclick').match(/'([^']+)'/)[1];
-                    app.updateLiveBalance(itemId);
+                    const itemId = document.querySelector('[onclick*="confirmAddStock"]')?.getAttribute('onclick').match(/'([^']+)'/)?.[1];
+                    if (itemId) app.updateLiveBalance(itemId);
                 }
             }
             popup?.parentNode && popup.remove();
             this._colorPickerOpen = null;
         };
 
-        // ── رسم الألوان (الرسمية + المخصصة) ──────────────────
         this._allColors().forEach(c => {
             if (availableColors && !availableColors.includes(c.name)) return;
             const el = document.createElement('div');
             el.title = c.name;
-            el.style.cssText = `width:28px;height:28px;border-radius:8px;background:${c.hex};border:2px solid ${c.border || '#ccc'};cursor:pointer;transition:transform .15s`;
-            if (c.rainbow) el.style.background = 'linear-gradient(135deg,#ff0000,#ff7700,#ffff00,#00ff00,#0000ff,#8b00ff)';
+            el.style.cssText = `width:28px;height:28px;border-radius:8px;background:${c.rainbow ? 'linear-gradient(135deg,#ff0000,#ff7700,#ffff00,#00ff00,#0000ff,#8b00ff)' : c.hex};border:2px solid ${c.border || '#ccc'};cursor:pointer;transition:transform .15s`;
             el.onclick = () => applyColor(c);
             popup.appendChild(el);
         });
 
-        // ── زر "أخرى" ─────────────────────────────────────────
+        // زر "أخرى" للون مخصص
         const otherBtn = document.createElement('div');
         otherBtn.title = 'لون مخصص';
-        otherBtn.style.cssText = `width:28px;height:28px;border-radius:8px;background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);border:2px solid #aaa;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;transition:transform .15s`;
+        otherBtn.style.cssText = `width:28px;height:28px;border-radius:8px;background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);border:2px solid #aaa;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px`;
         otherBtn.innerHTML = '✏️';
-        otherBtn.onclick = () => {
-            popup.remove();
-            this._colorPickerOpen = null;
-            this._openCustomColorModal(targetId, applyColor);
-        };
+        otherBtn.onclick = () => { popup.remove(); this._colorPickerOpen = null; this._openCustomColorModal(targetId, applyColor); };
         popup.appendChild(otherBtn);
 
         document.body.appendChild(popup);
         const r = btn.getBoundingClientRect();
-        const allCount = this._allColors().length + 1; // +1 for "other" btn
-        const spaceBelow = window.innerHeight - r.bottom;
+        const allCount = this._allColors().length + 1;
         const popupH = Math.ceil(allCount / 6) * 36 + 16;
-        if (spaceBelow < popupH && r.top > popupH) {
-            popup.style.bottom = (window.innerHeight - r.top + 4) + 'px';
-        } else {
-            popup.style.top = (r.bottom + 6) + 'px';
-        }
-        popup.style.left = Math.max(4, r.left) + 'px';
+        const spaceBelow = window.innerHeight - r.bottom;
+        popup.style.top = (spaceBelow < popupH && r.top > popupH) ? 'auto' : (r.bottom + 6) + 'px';
+        if (spaceBelow < popupH && r.top > popupH) popup.style.bottom = (window.innerHeight - r.top + 4) + 'px';
+        popup.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 230)) + 'px';
 
-        // ── Close on outside click ─────────────────────────────
         const closeHandler = (e) => {
             if (!popup.contains(e.target) && e.target !== btn) {
-                popup.remove();
-                this._colorPickerOpen = null;
+                popup.remove(); this._colorPickerOpen = null;
                 document.removeEventListener('mousedown', closeHandler, true);
             }
         };
         setTimeout(() => document.addEventListener('mousedown', closeHandler, true), 50);
     },
 
-    // ── مودال إضافة لون مخصص ─────────────────────────────────
     _openCustomColorModal(targetId, applyColorFn) {
         document.getElementById('customColorModal')?.remove();
-
         const modal = document.createElement('div');
-        modal.id = 'customColorModal';
-        modal.className = 'modal-j open';
+        modal.id = 'customColorModal'; modal.className = 'modal-j open';
         modal.innerHTML = `
         <div class="modal-overlay" onclick="document.getElementById('customColorModal').remove()"></div>
         <div class="modal-sheet" style="max-width:360px">
             <div class="modal-handle"></div>
-            <div class="modal-title">
-                <i class="fas fa-palette" style="color:var(--gold)"></i> إضافة لون مخصص
-            </div>
+            <div class="modal-title"><i class="fas fa-palette" style="color:var(--gold)"></i> إضافة لون مخصص</div>
             <div class="row g-3">
                 <div class="col-12">
                     <label class="form-label-j">اسم اللون <span style="color:var(--ruby-light)">*</span></label>
-                    <input type="text" id="ccName" class="form-control-j" placeholder="مثال: أزرق سماوي فاتح"
-                        style="font-size:.9rem" dir="rtl" autocomplete="off">
+                    <input type="text" id="ccName" class="form-control-j" placeholder="مثال: أزرق سماوي فاتح" dir="rtl" autocomplete="off">
                 </div>
                 <div class="col-12">
-                    <label class="form-label-j">اختر اللون <span style="color:var(--ruby-light)">*</span></label>
+                    <label class="form-label-j">اختر اللون</label>
                     <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
-                        <input type="color" id="ccHex" value="#C9A84C"
-                            style="width:60px;height:48px;border:2px solid var(--border);border-radius:10px;cursor:pointer;padding:2px;background:transparent;flex-shrink:0">
-                        <div id="ccPreview" style="flex:1;min-width:120px;height:48px;border-radius:10px;background:#C9A84C;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;transition:background .2s">
+                        <input type="color" id="ccHex" value="#C9A84C" style="width:60px;height:48px;border:2px solid var(--border);border-radius:10px;cursor:pointer;padding:2px;background:transparent;flex-shrink:0">
+                        <div id="ccPreview" style="flex:1;min-width:120px;height:48px;border-radius:10px;background:#C9A84C;border:1px solid var(--border);display:flex;align-items:center;justify-content:center">
                             <span id="ccPreviewLabel" style="color:#fff;font-weight:700;font-size:.85rem;text-shadow:0 1px 3px rgba(0,0,0,.5)">معاينة</span>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="d-flex gap-3 mt-4">
-                <button class="btn-j btn-gold flex-fill" id="ccSaveBtn">
-                    <i class="fas fa-save"></i> حفظ وتطبيق
-                </button>
+                <button class="btn-j btn-gold flex-fill" id="ccSaveBtn"><i class="fas fa-save"></i> حفظ وتطبيق</button>
                 <button class="btn-j btn-ghost" onclick="document.getElementById('customColorModal').remove()">إلغاء</button>
             </div>
         </div>`;
-
         document.body.appendChild(modal);
-
-        // ── Live preview ───────────────────────────────────────
         const hexInput = document.getElementById('ccHex');
         const preview = document.getElementById('ccPreview');
         const previewLabel = document.getElementById('ccPreviewLabel');
         hexInput.addEventListener('input', () => {
             preview.style.background = hexInput.value;
-            // اختيار نص أبيض أو أسود بناءً على السطوع
-            const r = parseInt(hexInput.value.slice(1,3),16);
-            const g = parseInt(hexInput.value.slice(3,5),16);
-            const b = parseInt(hexInput.value.slice(5,7),16);
-            const lum = (r*299 + g*587 + b*114) / 1000;
-            previewLabel.style.color = lum > 128 ? '#1A1A2E' : '#fff';
+            const r = parseInt(hexInput.value.slice(1,3),16), g = parseInt(hexInput.value.slice(3,5),16), b = parseInt(hexInput.value.slice(5,7),16);
+            previewLabel.style.color = (r*299+g*587+b*114)/1000 > 128 ? '#1A1A2E' : '#fff';
         });
-
-        // ── حفظ وتطبيق ────────────────────────────────────────
         document.getElementById('ccSaveBtn').onclick = async () => {
             const name = document.getElementById('ccName').value.trim();
-            const hex  = document.getElementById('ccHex').value;
+            const hex = document.getElementById('ccHex').value;
             if (!name) { this.toast('يرجى كتابة اسم اللون', 'error'); return; }
-            if (this._allColors().find(c => c.name === name)) {
-                this.toast('هذا الاسم موجود مسبقاً في القائمة', 'error'); return;
-            }
+            if (this._allColors().find(c => c.name === name)) { this.toast('هذا الاسم موجود مسبقاً', 'error'); return; }
             const newColor = { name, hex, border: hex, custom: true };
-            // حفظ في Firebase
             await push(customColorsRef, newColor);
-            // تطبيق فوري على الحقل
             applyColorFn(newColor);
             document.getElementById('customColorModal').remove();
             this.toast(`تم إضافة اللون "${name}" ✓`, 'success');
         };
-    },
-
-    _colorHex(name) {
-        if (!name) return null;
-        if (name.startsWith('#')) return name;
-        const found = this._allColors().find(c => c.name === name);
-        return found?.hex || null;
     },
 
     // Returns an inline style string for background (handles gradients)
@@ -1660,233 +1683,147 @@ async deductStock(orderId) {
         }
     },
 
+    // ── إرجاع المخزون عند الإلغاء أو التأجيل ──────────────
+    async _returnStock(orderId) {
+        const o = this.orders[orderId]; if (!o) return;
+        if (!o.stockDeducted) return;
+        const itemsToReturn = o.items || [{ itemId: o.itemId, size: o.exactKey || o.size, exactKey: o.exactKey, itemColor: o.itemColor, qty: o.qty }];
+        const updates = {};
+        for (const it of itemsToReturn) {
+            if (!it.itemId) continue;
+            const item = this.warehouse[it.itemId]; if (!item) continue;
+            let key = it.exactKey || it.size;
+            if (item.sizes && item.sizes[key] === undefined && it.itemColor) {
+                if (item.sizes[`${it.size} - ${it.itemColor}`] !== undefined) key = `${it.size} - ${it.itemColor}`;
+            }
+            const current = item.sizes?.[key] || 0;
+            const qty = parseInt(it.qty) || 1;
+            updates[`jawaher_warehouse/${it.itemId}/sizes/${key}`] = current + qty;
+            this.log('stock', orderId, `إرجاع ${qty} قطعة لـ ${item.name} مقاس/لون ${key}`);
+        }
+        if (Object.keys(updates).length > 0) {
+            updates[`jawaher_orders/${orderId}/stockDeducted`] = false;
+            await update(ref(db), updates);
+        }
+    },
+
     // ============ PRINT ============
       printOrder(o, id) {
-
-        const win       = window.open('', '_blank');
-
-        const pageLogo  = o.pageName || 'جواهر';
-
-        const items     = o.items ? o.items : [{ itemName: o.itemName, itemColor: o.itemColor, size: o.size, qty: o.qty, price: o.price }];
-
+        const win = window.open('', '_blank');
         win.document.write(this._buildLabelHTML([{ id, o }]));
-
         win.document.close();
-
-        setTimeout(() => { win.print(); }, 800);
-
         update(ref(db, `jawaher_orders/${id}`), { status: 'done' });
-
         this.deductStock(id);
-
     },
-
-
 
     executePrint(ids) {
-
-        const win     = window.open('', '_blank');
-
-        const updates = {};
-
-        const labels  = ids.map(id => ({ id, o: this.orders[id] })).filter(x => x.o);
-
+        const win    = window.open('', '_blank');
+        const labels = ids.map(id => ({ id, o: this.orders[id] })).filter(x => x.o);
         win.document.write(this._buildLabelHTML(labels, true));
-
         win.document.close();
-
+        const updates = {};
         setTimeout(() => {
-
-            win.print();
-
             labels.forEach(({ id }) => { updates[`jawaher_orders/${id}/status`] = 'done'; });
-
             update(ref(db), updates).then(() => { labels.forEach(({ id }) => this.deductStock(id)); });
-
-        }, 800);
-
+        }, 1500);
         this.toast('تمت الطباعة وتحويل الحالة إلى جاهزة', 'success');
-
     },
 
-
-
- _buildLabelHTML(labels, multi = false) {
-
-        const pageStyle = `@page { size: 10cm 10cm; margin: 0; }`;
-
+    _buildLabelHTML(labels, multi = false) {
         let barcodeScripts = '';
 
-        
-
-        let labelsHtml = labels.map(({ id, o }) => {
-
-            let pageNamesSet = new Set();
-
+        const labelsHtml = labels.map(({ id, o }, labelIndex) => {
+            const pageNamesSet = new Set();
             if (o.pageName) pageNamesSet.add(o.pageName);
-
-            
-
-            const orderItems = o.items || [{ itemId: o.itemId }];
-
-            orderItems.forEach(it => {
-
-                const warehouseItem = this.warehouse[it.itemId];
-
-                if (warehouseItem && warehouseItem.pageName) pageNamesSet.add(warehouseItem.pageName);
-
-            });
-
-
-
+            (o.items || []).forEach(it => { const w = this.warehouse[it.itemId]; if (w?.pageName) pageNamesSet.add(w.pageName); });
             const finalPageHeader = pageNamesSet.size > 0 ? Array.from(pageNamesSet).join(' & ') : 'جواهر';
+            const items = o.items || [{ itemName: o.itemName, itemColor: o.itemColor, size: o.size, qty: o.qty, price: o.price }];
+            const bcId = `bc_lbl_${labelIndex}_${id.slice(-6)}`;
+            const bcValue = id.slice(-12);
+            barcodeScripts += `try{JsBarcode("#${bcId}","${bcValue}",{format:"CODE128",width:1.4,height:28,displayValue:true,fontSize:9,margin:2,background:"transparent"});}catch(e){}`;
 
-            const items = o.items || [{ itemName: o.itemName, itemColor: o.itemColor, size: o.size, qty: o.qty }];
+            const firstItemW = this.warehouse[items[0]?.itemId];
+            const sellPriceVal = firstItemW?.sellPrice || '';
 
-            const bcId = `bc_${id.slice(-8)}`;
-
-            barcodeScripts += `JsBarcode("#${bcId}", "${id.slice(-12)}", { format:"CODE128", width:1.2, height:18, displayValue:false });`;
-
-            
-
-            // بناء صفوف الأصناف للبوليصة
-            const itemsRows = items.map(it => `
-                <tr>
-                    <td style="padding:2px 5px;border:1px solid #ddd;font-size:.72rem;font-weight:700">${it.itemName || '-'}</td>
-                    <td style="padding:2px 5px;border:1px solid #ddd;font-size:.72rem;text-align:center">${it.itemColor || '-'}</td>
-                    <td style="padding:2px 5px;border:1px solid #ddd;font-size:.72rem;text-align:center">${it.size || '-'}</td>
-                    <td style="padding:2px 5px;border:1px solid #ddd;font-size:.72rem;text-align:center;font-weight:800">${it.qty || 1}</td>
-                </tr>`).join('');
-
-            // ── أيقونات التواصل ─────────────────────────────────
-            const contactChannel = o.contactChannel || '';
             const contactIcons = {
-                'واتس اب':  { svg: `<svg width="13" height="13" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.557 4.126 1.526 5.858L.057 23.888a.5.5 0 0 0 .617.6l6.162-1.615A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.694-.528-5.217-1.446l-.374-.224-3.878 1.016 1.033-3.772-.244-.389A9.952 9.952 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>`, label: 'واتساب' },
-                'انستا':    { svg: `<svg width="13" height="13" viewBox="0 0 24 24"><defs><radialGradient id="ig" cx="30%" cy="107%" r="150%"><stop offset="0%" stop-color="#fdf497"/><stop offset="5%" stop-color="#fdf497"/><stop offset="45%" stop-color="#fd5949"/><stop offset="60%" stop-color="#d6249f"/><stop offset="90%" stop-color="#285AEB"/></radialGradient></defs><path fill="url(#ig)" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>`, label: 'انستغرام' },
-                'فيس بوك': { svg: `<svg width="13" height="13" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>`, label: 'فيسبوك' },
+                'واتس اب':  { svg: '<svg width="11" height="11" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.557 4.126 1.526 5.858L.057 23.888a.5.5 0 0 0 .617.6l6.162-1.615A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.694-.528-5.217-1.446l-.374-.224-3.878 1.016 1.033-3.772-.244-.389A9.952 9.952 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>', label:'واتساب' },
+                'انستا':    { svg: '<svg width="11" height="11" viewBox="0 0 24 24"><path fill="#d6249f" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069z"/></svg>', label:'انستغرام' },
+                'فيس بوك': { svg: '<svg width="11" height="11" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>', label:'فيسبوك' },
             };
-            const chInfo = contactIcons[contactChannel];
-            const contactIconHtml = chInfo
-                ? `<span style="display:inline-flex;align-items:center;gap:2px;background:#f0f0f0;border-radius:4px;padding:1px 4px;vertical-align:middle">${chInfo.svg}<span style="font-size:.5rem;font-weight:700">${chInfo.label}</span></span>`
-                : '';
+            const chInfo = contactIcons[o.contactChannel];
+            const contactHtml = chInfo ? `<span style="display:inline-flex;align-items:center;gap:2px;font-size:.5rem;font-weight:700">${chInfo.svg} ${chInfo.label}</span>` : '';
+            const weightHtml = (o.weightKg||o.lengthCm) ? `<div style="font-size:.48rem;color:#666;margin-top:1px">${o.weightKg?`⚖ ${o.weightKg}kg`:''} ${o.lengthCm?`📏 ${o.lengthCm}cm`:''}</div>` : '';
 
-            // ── وزن وطول ──────────────────────────────────────────
-            const weightVal = o.weightKg || '';
-            const lengthVal = o.lengthCm || '';
-            const weightLengthHtml = (weightVal || lengthVal) ? `
-                <div style="background:#f9f9f9;border-radius:3px;padding:2px 5px;border:1px solid #eee;display:flex;gap:6px">
-                    ${weightVal ? `<span style="font-size:.48rem;color:#888">وزن: <strong style="font-size:.6rem;color:#333">${weightVal} kg</strong></span>` : ''}
-                    ${weightVal && lengthVal ? `<span style="color:#ccc">|</span>` : ''}
-                    ${lengthVal ? `<span style="font-size:.48rem;color:#888">طول: <strong style="font-size:.6rem;color:#333">${lengthVal} cm</strong></span>` : ''}
-                </div>` : '';
-
-            return `
-
-            <div style="width:10cm;height:10cm;padding:3mm;display:block;page-break-after:always;overflow:hidden;box-sizing:border-box">
-
-                <div style="width:100%;height:100%;display:flex;flex-direction:column;border:2px solid #1A3A8F;border-radius:5px;font-family:Almarai,Arial">
-
-                    <!-- الهيدر العلوي: اسم الصفحة | الرقم | اسم المدخل -->
-                    <div style="text-align:center;padding:3px 6px;border-bottom:2px solid #1A3A8F;background:#0F2260;color:#fff">
-                        <div style="font-size:0.92rem;font-weight:800;letter-spacing:.5px;color:#7AA0F0">◆ ${finalPageHeader} ◆</div>
-                        <div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:1px">
-                            <span style="font-size:.52rem;color:#aaa;direction:ltr">📞 077 65 01 333</span>
-                            <span style="color:#444;font-size:.5rem">|</span>
-                            <span style="font-size:.52rem;color:#aaa">👤 ${o.entryUser || ''}</span>
-                        </div>
-                    </div>
-
-                    <!-- الجسم الرئيسي - عمودين -->
-                    <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:0;overflow:hidden">
-
-                        <!-- العمود الأيمن: الزبون، التواصل، الصنف، اللون، المقاس، وزن/طول -->
-                        <div style="display:flex;flex-direction:column;gap:2px;padding:3px;border-left:1px solid #ccd">
-                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde">
-                                <div style="font-size:.44rem;color:#888">اسم الزبون</div>
-                                <div style="font-size:.82rem;font-weight:800;line-height:1.2">${o.custName || ''}</div>
-                            </div>
-                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde;display:flex;align-items:center;gap:4px">
-                                <div style="font-size:.44rem;color:#888">التواصل:</div>
-                                <div>${contactIconHtml || '<span style="font-size:.52rem;color:#bbb">—</span>'}</div>
-                            </div>
-                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde">
-                                <div style="font-size:.44rem;color:#888">اسم الصنف</div>
-                                <div style="font-size:.72rem;font-weight:800;line-height:1.2">${items.map(it => it.itemName || '').join('، ')}</div>
-                            </div>
-                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde">
-                                <div style="font-size:.44rem;color:#888">اللون</div>
-                                <div style="font-size:.68rem;font-weight:700">${items.map(it => it.itemColor || '').join('، ') || '-'}</div>
-                            </div>
-                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde">
-                                <div style="font-size:.44rem;color:#888">المقاس</div>
-                                <div style="font-size:.72rem;font-weight:700">${items.map(it => it.size||'').filter(Boolean).join('، ') || '-'}</div>
-                            </div>
-                            ${weightLengthHtml}
-                        </div>
-
-                        <!-- العمود الأيسر: العنوان، الهاتف، القيمة شامل، ملاحظات -->
-                        <div style="display:flex;flex-direction:column;gap:2px;padding:3px">
-                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde">
-                                <div style="font-size:.44rem;color:#888">عنوان الزبون</div>
-                                <div style="font-size:.65rem;font-weight:700;line-height:1.2">${o.governorate ? o.governorate + ' - ' : ''}${o.custAddr || '-'}</div>
-                            </div>
-                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde">
-                                <div style="font-size:.44rem;color:#888">رقم التلفون</div>
-                                <div style="font-size:.85rem;font-weight:800;direction:ltr;text-align:right">${o.custMob || ''}</div>
-                            </div>
-                            <div style="background:#e6f4ed;border-radius:3px;padding:2px 5px;border:1.5px solid #1A6B4A">
-                                <div style="font-size:.44rem;color:#1A6B4A">القيمة شامل</div>
-                                <div style="font-size:1rem;font-weight:800;color:#1A6B4A">${o.price || 0} JOD</div>
-                            </div>
-                            <div style="background:#f4f6ff;border-radius:3px;padding:2px 5px;border:1px solid #dde;flex:1">
-                                <div style="font-size:.44rem;color:#888">ملاحظات</div>
-                                <div style="font-size:.62rem;font-weight:600">${o.tags || ''}</div>
-                            </div>
-                            <!-- يمنع فتح الطرد -->
-                            <div style="background:#FFF0F0;border:1.5px solid #C02525;border-radius:3px;padding:2px 5px;text-align:center">
-                                <div style="font-size:.6rem;font-weight:800;color:#C02525;letter-spacing:.3px">⚠ يُمنع فتح الطرد</div>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <!-- الباركود -->
-                    <div style="text-align:center;padding:2px;border-top:1px solid #dde">
-                        <svg id="${bcId}" style="max-width:100%;height:20px !important"></svg>
-                    </div>
-
+            return `<div class="label-page"><div class="label-inner">
+                <div class="lbl-header">
+                    <div class="lbl-pagename">◆ ${finalPageHeader} ◆</div>
+                    <div class="lbl-subheader"><span>📞 077 65 01 333</span><span>👤 ${o.entryUser||''}</span></div>
                 </div>
-
-            </div>`;
-
+                <div class="lbl-body">
+                    <div class="lbl-col lbl-col-right">
+                        <div class="lbl-field"><div class="lbl-field-label">اسم الزبون</div><div class="lbl-field-val lbl-name">${o.custName||''}</div></div>
+                        <div class="lbl-field lbl-field-sm"><div class="lbl-field-label">التواصل</div><div class="lbl-field-val">${contactHtml||'—'}</div></div>
+                        <div class="lbl-field"><div class="lbl-field-label">الصنف</div><div class="lbl-field-val lbl-item">${items.map(it=>it.itemName||'').join(' ، ')}</div></div>
+                        <div class="lbl-field lbl-field-sm"><div class="lbl-field-label">اللون</div><div class="lbl-field-val">${items.map(it=>it.itemColor||'').join('،')||'—'}</div></div>
+                        <div class="lbl-field lbl-field-sm"><div class="lbl-field-label">المقاس</div><div class="lbl-field-val">${items.map(it=>it.size||'').filter(Boolean).join('،')||'—'}</div></div>
+                        ${sellPriceVal?`<div class="lbl-field lbl-field-sm"><div class="lbl-field-label">سعر القطعة</div><div class="lbl-field-val" style="color:#1A6B4A;font-weight:700">${sellPriceVal} JOD</div></div>`:''}
+                        ${weightHtml}
+                    </div>
+                    <div class="lbl-col lbl-col-left">
+                        <div class="lbl-field"><div class="lbl-field-label">عنوان الزبون</div><div class="lbl-field-val lbl-addr">${o.governorate?o.governorate+' - ':''}${o.custAddr||'—'}</div></div>
+                        <div class="lbl-field"><div class="lbl-field-label">رقم الهاتف</div><div class="lbl-field-val lbl-phone" dir="ltr">${o.custMob||''}</div></div>
+                        <div class="lbl-field lbl-price-box"><div class="lbl-field-label" style="color:#1A6B4A">القيمة شامل</div><div class="lbl-field-val lbl-price">${o.price||0} JOD</div></div>
+                        <div class="lbl-field" style="flex:1"><div class="lbl-field-label">ملاحظات</div><div class="lbl-field-val lbl-notes">${o.tags||''}</div></div>
+                        <div class="lbl-warning">⚠ يُمنع فتح الطرد</div>
+                    </div>
+                </div>
+                <div class="lbl-barcode-wrap"><svg id="${bcId}"></svg></div>
+            </div></div>`;
         }).join('');
 
-
+        const css = `
+            @page{size:10cm 10cm;margin:0}
+            *{box-sizing:border-box;margin:0;padding:0}
+            body{font-family:'Almarai',Arial,sans-serif;background:#fff;margin:0}
+            @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.label-page{page-break-after:always;page-break-inside:avoid}.label-page:last-child{page-break-after:auto}}
+            .label-page{width:10cm;height:10cm;display:flex;align-items:stretch;padding:2.5mm;overflow:hidden}
+            .label-inner{width:100%;display:flex;flex-direction:column;border:2px solid #1A3A8F;border-radius:5px;overflow:hidden}
+            .lbl-header{background:#0F2260;color:#fff;padding:2.5px 6px;border-bottom:2px solid #1A3A8F;flex-shrink:0}
+            .lbl-pagename{font-size:8.5pt;font-weight:800;color:#7AA0F0;text-align:center;letter-spacing:.4px}
+            .lbl-subheader{display:flex;justify-content:center;gap:8px;font-size:5pt;color:#aaa;margin-top:1px}
+            .lbl-body{flex:1;display:grid;grid-template-columns:1fr 1fr;overflow:hidden;min-height:0}
+            .lbl-col{display:flex;flex-direction:column;gap:1.5px;padding:3px;overflow:hidden}
+            .lbl-col-right{border-left:1px solid #ccd}
+            .lbl-field{background:#f4f6ff;border:1px solid #dde;border-radius:3px;padding:2px 5px;overflow:hidden}
+            .lbl-field-sm{flex-shrink:0}
+            .lbl-field-label{font-size:4.2pt;color:#888;line-height:1.2}
+            .lbl-field-val{font-size:6.5pt;font-weight:700;color:#111;line-height:1.25;overflow:hidden}
+            .lbl-name{font-size:8pt;font-weight:800}
+            .lbl-item{font-size:7pt;font-weight:800}
+            .lbl-addr{font-size:6pt}
+            .lbl-phone{font-size:8.5pt;font-weight:800;text-align:right}
+            .lbl-price-box{background:#e6f4ed!important;border-color:#1A6B4A!important}
+            .lbl-price{font-size:10pt;font-weight:800;color:#1A6B4A}
+            .lbl-notes{font-size:5.5pt;font-weight:600}
+            .lbl-warning{background:#FFF0F0;border:1.5px solid #C02525;border-radius:3px;padding:2px 5px;font-size:6pt;font-weight:800;color:#C02525;text-align:center;flex-shrink:0}
+            .lbl-barcode-wrap{text-align:center;padding:1px 4px 2px;border-top:1px solid #dde;flex-shrink:0;background:#fff;min-height:36px;display:flex;align-items:center;justify-content:center}
+            .lbl-barcode-wrap svg{max-width:100%;height:auto!important}`;
 
         return `<!DOCTYPE html><html dir="rtl"><head>
-
-            <meta charset="UTF-8"><title>بوليصة طباعة</title>
-
-            <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&display=swap" rel="stylesheet">
-
-            <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"><\/script>
-
-            <style>
-
-                ${pageStyle}
-
-                * { box-sizing: border-box; }
-
-                body { font-family: 'Almarai',Arial; margin:0; padding:0; background:#fff; }
-
-                @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
-
-            </style>
-
-        </head><body>${labelsHtml}<script>${barcodeScripts}<\/script></body></html>`;
-
+<meta charset="UTF-8"><title>بوليصة طباعة</title>
+<link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"><\/script>
+<style>${css}</style>
+</head><body>
+${labelsHtml}
+<script>
+window.onload=function(){
+    ${barcodeScripts}
+    setTimeout(function(){window.print();},600);
+};
+<\/script>
+</body></html>`;
     },
-
 
     // ============ REPORTS ============
   getFiltered() {
@@ -2017,6 +1954,7 @@ async deductStock(orderId) {
     rBulkPrint() { this.executePrint([...this.selectedR]); this.selectedR.clear(); this.updateRBulkPanel(); },
     async rBulkDelete() {
         if (!confirm(`حذف ${this.selectedR.size} طلبات؟`)) return;
+        for (const id of this.selectedR) { await this._returnStock(id); }
         const upd = {};
         this.selectedR.forEach(id => { upd[`jawaher_orders/${id}`] = null; this.log('delete', id, 'حذف جماعي'); });
         await update(ref(db), upd);
@@ -2083,15 +2021,17 @@ async deductStock(orderId) {
 
     renderNimSizesGrid() {
         const grid = document.getElementById('nimSizesGrid'); if (!grid) return;
+        const mainBarcode = document.getElementById('nimBarcode')?.value?.trim().toUpperCase() || '';
         grid.innerHTML = (this.nimSizeRows || []).map((row, i) => {
-            const s = row.size || ''; const c = row.color || ''; const hex = row.hex || ''; const b = row.barcode || '';
+            const s = row.size || ''; const c = row.color || ''; const hex = row.hex || '';
+            const b = row.barcode !== undefined ? row.barcode : mainBarcode;
             return `<div class="col-12 nim-size-row" id="nimsr_${i}">
                 <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;background:var(--paper);padding:8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px">
                     <input type="text"   class="form-control-j nim-s-val" style="width:60px;text-align:center;font-weight:700" placeholder="مقاس" value="${s}">
                     <input type="text"   id="nim_color_${i}" class="form-control-j nim-c-val" placeholder="اللون" readonly
                         style="width:80px;cursor:pointer;font-size:.8rem;border-right:4px solid ${hex || 'var(--border)'}"
                         value="${c}" data-hex="${hex}" onclick="app.openColorPicker(${i},'nim_color')">
-                    <input type="text"   class="form-control-j nim-b-val" placeholder="باركود (اختياري)" value="${b}" style="flex:1;min-width:100px;font-size:.85rem;font-family:monospace" dir="ltr">
+                    <input type="text"   class="form-control-j nim-b-val" placeholder="${mainBarcode || 'باركود (اختياري)'}" value="${b}" style="flex:1;min-width:100px;font-size:.85rem;font-family:monospace;background:${b&&b===mainBarcode?'rgba(201,168,76,.06)':'الinherit'}" dir="ltr" title="يرث باركود المنتج تلقائياً">
                     <input type="number" class="form-control-j nim-q-val" placeholder="كمية" min="0" value="0" style="width:65px">
                     <button class="btn-j btn-ruby btn-xs-j" onclick="app.removeNimSizeRow(${i})" style="flex-shrink:0;padding:.3rem .5rem"><i class="fas fa-times"></i></button>
                 </div>
@@ -2102,7 +2042,8 @@ async deductStock(orderId) {
     addNimSizeRow() {
         if (!this.nimSizeRows) this.nimSizeRows = [];
         this._saveNimSizeRows();
-        this.nimSizeRows.push({ size: '' });
+        const mainBarcode2 = document.getElementById('nimBarcode')?.value?.trim().toUpperCase() || '';
+        this.nimSizeRows.push({ size: '', barcode: mainBarcode2 });
         this.renderNimSizesGrid();
     },
     removeNimSizeRow(i) {
@@ -2242,7 +2183,12 @@ async deductStock(orderId) {
                             <span class="item-qty-value">${total} <small style="font-size:.8rem;font-weight:400;color:var(--ink-mid)">قطعة</small></span>
                         </div>
                         <div class="item-qty-bar"><div class="item-qty-fill ${fillCls}" style="width:${Math.min(total > 0 ? Math.round(total / Math.max(total, 20) * 100) : 0, 100)}%"></div></div>
-                        ${w.buyPrice ? `<div style="font-size:.75rem;color:var(--ink-mid);margin-bottom:.5rem">شراء: <strong>${w.buyPrice} JOD</strong>${w.sellPrice ? ' | بيع: <strong>' + w.sellPrice + ' JOD</strong>' : ''}</div>` : ''}
+                        ${(w.buyPrice || w.sellPrice) ? `
+                        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem">
+                            ${w.buyPrice ? `<div style="background:var(--paper-warm);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:.74rem"><span style="color:var(--ink-mid)">شراء</span> <strong>${w.buyPrice} JOD</strong></div>` : ''}
+                            ${w.sellPrice ? `<div style="background:rgba(26,107,74,.08);border:1px solid rgba(26,107,74,.25);border-radius:8px;padding:4px 10px;font-size:.74rem"><span style="color:var(--emerald)">بيع</span> <strong style="color:var(--emerald)">${w.sellPrice} JOD</strong></div>` : ''}
+                        </div>` : ''}
+                        ${w.notes ? `<div style="background:rgba(201,168,76,.06);border-right:3px solid var(--gold);border-radius:0 8px 8px 0;padding:5px 10px;font-size:.76rem;color:var(--ink-mid);margin-bottom:.5rem"><i class="fas fa-sticky-note" style="color:var(--gold);margin-left:4px"></i>${w.notes}</div>` : ''}
                         <div class="item-sizes mb-3">
                             ${sizes.length === 0 ? `<span style="color:var(--ink-mid);font-size:.8rem">لا توجد مقاسات</span>` : sizes.map(([key, q]) => {
                                 // فصل المقاس واللون من المفتاح "S - وردي" أو "S"
@@ -3105,10 +3051,16 @@ updateRetSizes(itemIdx) {
                             const dispSize = k.includes(' - ') ? k.split(' - ')[0] : k;
                             const dispColor = k.includes(' - ') ? k.split(' - ').slice(1).join(' - ') : (item.color || '');
                             const colorHex = this._colorHex(dispColor) || '#ccc';
-                            return `<div style="background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:.78rem;display:flex;align-items:center;gap:5px">
-                                <span style="font-weight:700">${dispSize}</span>
-                                ${dispColor ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colorHex}"></span><span style="color:var(--ink-mid)">${dispColor}</span>` : ''}
-                                <span style="font-weight:800;color:${q === 0 ? 'var(--ruby-light)' : 'var(--emerald)'}">${q}</span>
+                            return `<div style="background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:.78rem;display:flex;align-items:center;gap:5px;justify-content:space-between">
+                                <div style="display:flex;align-items:center;gap:5px">
+                                    <span style="font-weight:700">${dispSize}</span>
+                                    ${dispColor ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colorHex}"></span><span style="color:var(--ink-mid)">${dispColor}</span>` : ''}
+                                    <span style="font-weight:800;color:${q === 0 ? 'var(--ruby-light)' : 'var(--emerald)'}">${q}</span>
+                                </div>
+                                <button onclick="app.deleteItemSize('${itemId}','${k}')" title="حذف المقاس نهائياً"
+                                    style="background:none;border:none;cursor:pointer;color:var(--ruby-light);font-size:.75rem;padding:2px 5px;border-radius:4px;line-height:1"
+                                    onmouseenter="this.style.background='rgba(192,37,86,.1)'"
+                                    onmouseleave="this.style.background='none'"><i class="fas fa-trash-alt"></i></button>
                             </div>`;
                         }).join('')}
                     </div>`
@@ -3201,6 +3153,21 @@ updateRetSizes(itemIdx) {
             </div>
         </div>`;
         document.body.appendChild(modal);
+    },
+
+    async deleteItemSize(itemId, sizeKey) {
+        const item = this.warehouse[itemId]; if (!item) return;
+        const dispKey = sizeKey;
+        if (!confirm(`هل أنت متأكد من حذف المقاس "${dispKey}" نهائياً من المستودع؟`)) return;
+        const updates = {};
+        updates[`jawaher_warehouse/${itemId}/sizes/${sizeKey}`] = null;
+        if (item.variations?.[sizeKey] !== undefined) updates[`jawaher_warehouse/${itemId}/variations/${sizeKey}`] = null;
+        if (item.sizeColors?.[sizeKey] !== undefined) updates[`jawaher_warehouse/${itemId}/sizeColors/${sizeKey}`] = null;
+        await update(ref(db), updates);
+        this.log('stock', itemId, `حذف مقاس/لون: ${sizeKey}`);
+        this.toast(`تم حذف المقاس "${dispKey}" ✓`, 'success');
+        document.getElementById('invCorrModal')?.remove();
+        setTimeout(() => this.openInventoryCorrection(itemId), 300);
     },
 
     _icOnSizeSelect(itemId) {
