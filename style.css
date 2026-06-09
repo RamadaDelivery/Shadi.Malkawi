@@ -1232,14 +1232,24 @@ body {
 
 /* KPI cards for users page */
 .kpi-ruby {
-    background: linear-gradient(135deg, rgba(139,26,58,.1) 0%, rgba(139,26,58,.04) 100%);
-    border: 1px solid rgba(139,26,58,.2);
+    /* تم زيادة عتمة الخلفية وتغميق الدرجات ليظهر الفونت الأبيض بوضوح */
+    background: linear-gradient(135deg, rgba(139, 26, 58, 0.85) 0%, rgba(90, 15, 36, 0.95) 100%);
+    border: 1px solid rgba(139, 26, 58, 0.6);
 }
-.kpi-ruby .kpi-value { color: var(--ruby-light); }
-.kpi-ruby .kpi-icon  { color: var(--ruby-light); }
+
+.kpi-ruby .kpi-value { 
+    color: #ffffff; /* التأكيد على اللون الأبيض النقي لأعلى تباين */
+}
+
+.kpi-ruby .kpi-icon { 
+    color: #ffffff; 
+}
+
+/* الثيم الداكن (Dark Mode) */
 [data-theme="dark"] .kpi-ruby {
-    background: linear-gradient(135deg, rgba(192,37,86,.15) 0%, rgba(192,37,86,.05) 100%);
-    border-color: rgba(192,37,86,.2);
+    /* درجة الـ Ruby في الثيم الداكن تكون مشعة (Vibrant) وخلفية داكنة جداً خلف الخط الأبيض */
+    background: linear-gradient(135deg, rgba(192, 37, 86, 0.9) 0%, rgba(110, 18, 47, 0.95) 100%);
+    border-color: rgba(192, 37, 86, 0.5);
 }
 
 /* User avatar in table */
