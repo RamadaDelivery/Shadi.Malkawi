@@ -249,7 +249,7 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
                             display:flex;align-items:center;justify-content:center;
                             font-weight:800;font-size:.85rem;color:#1A1A2E;
                         ">${a.u[0].toUpperCase()}</div>
-                        <span style="flex:1;color:#111;font-size:.88rem;">${a.u}</span>
+                        <span style="flex:1;color:rgba(255,255,255,.8);font-size:.88rem;">${a.u}</span>
                         <button onclick="event.stopPropagation();app._removeAccount('${a.u}')" style="
                             background:none;border:none;color:rgba(255,255,255,.3);
                             cursor:pointer;font-size:.8rem;padding:.2rem .4rem;
@@ -1702,119 +1702,194 @@ async deductStock(orderId) {
     },
 
     _buildLabelHTML(labels, multi = false) {
-        let barcodeScripts = '';
-
-        const labelsHtml = labels.map(({ id, o }, labelIndex) => {
-            if (!o) return '';
+        // ─────────────────────────────────────────────────────────
+        // كل ملصق = صفحة مستقلة 10×10 سم.
+        // المشكلة السابقة: window.print() يُطبع قبل رسم الباركودات
+        // الحل: نجمع كل JS في مصفوفة، ننفذها بالتسلسل، ثم نطبع.
+        // ─────────────────────────────────────────────────────────
+        const labelsData = labels.map(({ id, o }, idx) => {
+            if (!o) return null;
             const pageNamesSet = new Set();
             if (o.pageName) pageNamesSet.add(o.pageName);
-            (o.items || []).forEach(it => { const w = this.warehouse[it.itemId]; if (w?.pageName) pageNamesSet.add(w.pageName); });
-            const finalPageHeader = pageNamesSet.size > 0 ? Array.from(pageNamesSet).join(' & ') : 'شادي ملكاوي';
-            const items = o.items || [{ itemName: o.itemName, itemColor: o.itemColor, size: o.size, qty: o.qty }];
-            const bcId = `bc_lbl_${labelIndex}_${id.slice(-6)}`;
-            const bcValue = id.slice(-12).toUpperCase();
-            barcodeScripts += `try{JsBarcode("#${bcId}","${bcValue}",{format:"CODE128",width:1.3,height:26,displayValue:true,fontSize:9,margin:2,background:"transparent"});}catch(e){console.warn("BC",e);}`;
+            (o.items || []).forEach(it => {
+                const w = this.warehouse[it.itemId];
+                if (w?.pageName) pageNamesSet.add(w.pageName);
+            });
+            const pageHeader = pageNamesSet.size > 0
+                ? Array.from(pageNamesSet).join(' & ')
+                : 'شادي ملكاوي';
+            const items = o.items || [{
+                itemName: o.itemName, itemColor: o.itemColor,
+                size: o.size, qty: o.qty
+            }];
+            const bcId  = `bc${idx}`;
+            const bcVal = id.slice(-12).toUpperCase();
 
-            // سعر البيع من أول صنف له سعر
-            let sellPriceVal = '';
+            let sellPrice = '';
             for (const it of items) {
                 const w = this.warehouse[it.itemId];
-                if (w?.sellPrice) { sellPriceVal = w.sellPrice; break; }
+                if (w?.sellPrice) { sellPrice = w.sellPrice; break; }
             }
 
-            const contactIcons = {
-                'واتس اب':  { svg: '<svg width="11" height="11" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.557 4.126 1.526 5.858L.057 23.888a.5.5 0 0 0 .617.6l6.162-1.615A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.694-.528-5.217-1.446l-.374-.224-3.878 1.016 1.033-3.772-.244-.389A9.952 9.952 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>', label:'واتساب' },
-                'انستا':    { svg: '<svg width="11" height="11" viewBox="0 0 24 24"><path fill="#d6249f" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069z"/></svg>', label:'انستغرام' },
-                'فيس بوك': { svg: '<svg width="11" height="11" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>', label:'فيسبوك' },
+            const ICONS = {
+                'واتس اب' : `<svg width="10" height="10" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.557 4.126 1.526 5.858L.057 23.888a.5.5 0 0 0 .617.6l6.162-1.615A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.694-.528-5.217-1.446l-.374-.224-3.878 1.016 1.033-3.772-.244-.389A9.952 9.952 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>واتس`,
+                'انستا'   : `<svg width="10" height="10" viewBox="0 0 24 24"><path fill="#d6249f" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069z"/></svg>انستا`,
+                'فيس بوك': `<svg width="10" height="10" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>فيسبوك`,
             };
-            const chInfo = contactIcons[o.contactChannel];
-            const contactHtml = chInfo ? `<span style="display:inline-flex;align-items:center;gap:2px;font-size:.5rem;font-weight:700">${chInfo.svg}${chInfo.label}</span>` : '';
-            const weightHtml = (o.weightKg || o.lengthCm) ? `<div style="font-size:.46rem;color:#555;margin-top:1px">${o.weightKg ? `⚖${o.weightKg}kg ` : ''}${o.lengthCm ? `📏${o.lengthCm}cm` : ''}</div>` : '';
+            const contactHtml = ICONS[o.contactChannel]
+                ? `<span style="display:inline-flex;align-items:center;gap:1px;font-size:5.5pt;font-weight:700">${ICONS[o.contactChannel]}</span>`
+                : '';
 
-            const itemNames  = items.map(it => it.itemName || '').filter(Boolean).join(' ، ');
+            const weightHtml = (o.weightKg || o.lengthCm)
+                ? `<div style="font-size:4.5pt;color:#555;margin-top:1px">${o.weightKg?`⚖${o.weightKg}kg `:``}${o.lengthCm?`📏${o.lengthCm}cm`:``}</div>`
+                : '';
+
+            const itemNames  = items.map(it => it.itemName  || '').filter(Boolean).join(' ، ');
             const itemColors = items.map(it => it.itemColor || '').filter(Boolean).join('، ') || '—';
-            const itemSizes  = items.map(it => it.size || '').filter(Boolean).join('، ') || '—';
+            const itemSizes  = items.map(it => it.size      || '').filter(Boolean).join('، ') || '—';
 
-            return `<div class="label-page">
-  <div class="label-inner">
-    <div class="lbl-hdr">
-      <div class="lbl-pgname">◆ ${finalPageHeader} ◆</div>
-      <div class="lbl-subhdr"><span>📞 077 65 01 333</span><span>👤 ${o.entryUser || ''}</span></div>
+            const html = `<div class="lp">
+  <div class="li">
+    <div class="lh">
+      <div class="lpn">◆ ${pageHeader} ◆</div>
+      <div class="lsh"><span>📞 077 65 01 333</span><span>👤 ${o.entryUser || ''}</span></div>
     </div>
-    <div class="lbl-body">
-      <div class="lbl-col lbl-col-r">
-        <div class="lbl-f"><div class="lbl-fl">اسم الزبون</div><div class="lbl-fv lbl-name">${o.custName || ''}</div></div>
-        <div class="lbl-f lbl-fsm"><div class="lbl-fl">التواصل</div><div class="lbl-fv">${contactHtml || '—'}</div></div>
-        <div class="lbl-f"><div class="lbl-fl">الصنف</div><div class="lbl-fv lbl-item">${itemNames}</div></div>
-        <div class="lbl-f lbl-fsm"><div class="lbl-fl">اللون</div><div class="lbl-fv">${itemColors}</div></div>
-        <div class="lbl-f lbl-fsm"><div class="lbl-fl">المقاس</div><div class="lbl-fv">${itemSizes}</div></div>
-        ${sellPriceVal ? `<div class="lbl-f lbl-fsm"><div class="lbl-fl">سعر القطعة</div><div class="lbl-fv" style="color:#1A6B4A;font-weight:800">${sellPriceVal} JOD</div></div>` : ''}
+    <div class="lb">
+      <div class="lc lcr">
+        <div class="lf"><div class="lfl">اسم الزبون</div><div class="lfv lname">${o.custName || ''}</div></div>
+        <div class="lf lfsm"><div class="lfl">التواصل</div><div class="lfv">${contactHtml || '—'}</div></div>
+        <div class="lf"><div class="lfl">الصنف</div><div class="lfv litem">${itemNames}</div></div>
+        <div class="lf lfsm"><div class="lfl">اللون</div><div class="lfv">${itemColors}</div></div>
+        <div class="lf lfsm"><div class="lfl">المقاس</div><div class="lfv">${itemSizes}</div></div>
+        ${sellPrice ? `<div class="lf lfsm"><div class="lfl">سعر القطعة</div><div class="lfv" style="color:#1A6B4A;font-weight:800">${sellPrice} JOD</div></div>` : ''}
         ${weightHtml}
       </div>
-      <div class="lbl-col lbl-col-l">
-        <div class="lbl-f"><div class="lbl-fl">عنوان الزبون</div><div class="lbl-fv lbl-addr">${o.governorate ? o.governorate + ' - ' : ''}${o.custAddr || '—'}</div></div>
-        <div class="lbl-f"><div class="lbl-fl">رقم الهاتف</div><div class="lbl-fv lbl-phone" dir="ltr">${o.custMob || ''}</div></div>
-        <div class="lbl-f lbl-price-box"><div class="lbl-fl" style="color:#1A6B4A">القيمة شامل</div><div class="lbl-fv lbl-price">${o.price || 0} JOD</div></div>
-        <div class="lbl-f" style="flex:1;overflow:hidden"><div class="lbl-fl">ملاحظات</div><div class="lbl-fv lbl-notes">${o.tags || ''}</div></div>
-        <div class="lbl-warn">⚠ يُمنع فتح الطرد</div>
+      <div class="lc lcl">
+        <div class="lf"><div class="lfl">عنوان الزبون</div><div class="lfv laddr">${o.governorate ? o.governorate + ' - ' : ''}${o.custAddr || '—'}</div></div>
+        <div class="lf"><div class="lfl">رقم الهاتف</div><div class="lfv lphone" dir="ltr">${o.custMob || ''}</div></div>
+        <div class="lf lprice-box"><div class="lfl" style="color:#1A6B4A">القيمة شامل</div><div class="lfv lprice">${o.price || 0} JOD</div></div>
+        <div class="lf" style="flex:1;overflow:hidden"><div class="lfl">ملاحظات</div><div class="lfv lnotes">${o.tags || ''}</div></div>
+        <div class="lwarn">⚠ يُمنع فتح الطرد</div>
       </div>
     </div>
-    <div class="lbl-bc"><svg id="${bcId}"></svg></div>
+    <div class="lbc"><svg id="${bcId}"></svg></div>
   </div>
 </div>`;
-        }).join('');
+            return { html, bcId, bcVal };
+        }).filter(Boolean);
+
+        const labelsHtml = labelsData.map(d => d.html).join('\n');
+
+        // كل باركود يُرسم بشكل متسلسل لضمان اكتمالهم جميعاً قبل الطباعة
+        const bcArray = JSON.stringify(labelsData.map(d => ({ id: d.bcId, val: d.bcVal })));
 
         const css = `
 @page { size: 10cm 10cm; margin: 0 }
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+* { box-sizing: border-box; margin: 0; padding: 0 }
 html, body { width: 10cm; background: #fff; font-family: 'Almarai', Arial, sans-serif }
+body { margin: 0 }
 @media print {
   html, body { width: 10cm }
-  .label-page { page-break-after: always; page-break-inside: avoid }
-  .label-page:last-child { page-break-after: auto }
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact }
+  .lp { page-break-after: always; page-break-inside: avoid }
+  .lp:last-child { page-break-after: auto }
 }
-.label-page { width: 10cm; height: 10cm; display: flex; align-items: stretch; padding: 2.5mm; overflow: hidden }
-.label-inner { width: 100%; display: flex; flex-direction: column; border: 2px solid #1A3A8F; border-radius: 5px; overflow: hidden }
-.lbl-hdr { background: #0F2260; color: #fff; padding: 2.5px 6px; border-bottom: 1.5px solid #1A3A8F; flex-shrink: 0 }
-.lbl-pgname { font-size: 8.5pt; font-weight: 800; color: #7AA0F0; text-align: center; letter-spacing: .4px }
-.lbl-subhdr { display: flex; justify-content: center; gap: 8px; font-size: 5pt; color: #aabde0; margin-top: 1px }
-.lbl-body { flex: 1; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; min-height: 0 }
-.lbl-col { display: flex; flex-direction: column; gap: 1.5px; padding: 3px; overflow: hidden; min-width: 0 }
-.lbl-col-r { border-left: 1px solid #ccd }
-.lbl-f { background: #f4f6ff; border: 1px solid #dde; border-radius: 3px; padding: 1.5px 4px; overflow: hidden; min-height: 0; flex-shrink: 1 }
-.lbl-fsm { flex-shrink: 0 }
-.lbl-fl { font-size: 4pt; color: #888; line-height: 1.2 }
-.lbl-fv { font-size: 6.5pt; font-weight: 700; color: #111; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.lbl-name { font-size: 8pt; font-weight: 800; white-space: normal; line-height: 1.15 }
-.lbl-item { font-size: 6.5pt; font-weight: 800; white-space: normal; line-height: 1.15 }
-.lbl-addr { font-size: 6pt; white-space: normal; line-height: 1.2 }
-.lbl-phone { font-size: 8.5pt; font-weight: 800; text-align: right }
-.lbl-price-box { background: #e6f4ed !important; border-color: #1A6B4A !important; flex-shrink: 0 }
-.lbl-price { font-size: 10pt; font-weight: 800; color: #1A6B4A }
-.lbl-notes { font-size: 5.5pt; white-space: normal; line-height: 1.2 }
-.lbl-warn { background: #FFF0F0; border: 1.5px solid #C02525; border-radius: 3px; padding: 1.5px 4px; font-size: 6pt; font-weight: 800; color: #C02525; text-align: center; flex-shrink: 0; margin-top: auto }
-.lbl-bc { text-align: center; padding: 1px 4px 2px; border-top: 1px solid #dde; flex-shrink: 0; background: #fff; min-height: 34px; display: flex; align-items: center; justify-content: center }
-.lbl-bc svg { max-width: 100%; height: auto !important }`;
+.lp  { width:10cm; height:10cm; display:flex; align-items:stretch; padding:2.5mm; overflow:hidden }
+.li  { width:100%; display:flex; flex-direction:column; border:2px solid #1A3A8F; border-radius:5px; overflow:hidden }
+.lh  { background:#0F2260; color:#fff; padding:2.5px 6px; border-bottom:1.5px solid #1A3A8F; flex-shrink:0 }
+.lpn { font-size:8.5pt; font-weight:800; color:#7AA0F0; text-align:center; letter-spacing:.4px }
+.lsh { display:flex; justify-content:center; gap:8px; font-size:5pt; color:#aabde0; margin-top:1px }
+.lb  { flex:1; display:grid; grid-template-columns:1fr 1fr; overflow:hidden; min-height:0 }
+.lc  { display:flex; flex-direction:column; gap:1.5px; padding:3px; overflow:hidden; min-width:0 }
+.lcr { border-left:1px solid #ccd }
+.lf  { background:#f4f6ff; border:1px solid #dde; border-radius:3px; padding:1.5px 4px; overflow:hidden; flex-shrink:1 }
+.lfsm { flex-shrink:0 }
+.lfl  { font-size:4pt; color:#888; line-height:1.2 }
+.lfv  { font-size:6.5pt; font-weight:700; color:#111; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.lname  { font-size:8pt;   font-weight:800; white-space:normal; line-height:1.15 }
+.litem  { font-size:6.5pt; font-weight:800; white-space:normal; line-height:1.15 }
+.laddr  { font-size:6pt;   white-space:normal; line-height:1.2 }
+.lphone { font-size:8.5pt; font-weight:800; text-align:right }
+.lprice-box { background:#e6f4ed !important; border-color:#1A6B4A !important; flex-shrink:0 }
+.lprice { font-size:10pt; font-weight:800; color:#1A6B4A }
+.lnotes { font-size:5.5pt; white-space:normal; line-height:1.2 }
+.lwarn  { background:#FFF0F0; border:1.5px solid #C02525; border-radius:3px; padding:1.5px 4px; font-size:6pt; font-weight:800; color:#C02525; text-align:center; flex-shrink:0; margin-top:auto }
+.lbc    { text-align:center; padding:1px 4px 2px; border-top:1px solid #dde; flex-shrink:0; background:#fff; min-height:34px; display:flex; align-items:center; justify-content:center }
+.lbc svg { max-width:100%; height:auto !important }`;
 
+        // الطباعة: نرسم كل الباركودات أولاً ثم نطبع بعد تأخير كافٍ
         return `<!DOCTYPE html><html dir="rtl" lang="ar"><head>
-<meta charset="UTF-8"><title>بوليصة طباعة</title>
+<meta charset="UTF-8">
+<title>ملصقات الطباعة</title>
 <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"><\/script>
 <style>${css}</style>
 </head><body>
 ${labelsHtml}
 <script>
-(function(){
-  function run(){
-    ${barcodeScripts}
-    setTimeout(function(){ window.print(); }, 700);
+(function () {
+  var barcodes = ${bcArray};
+  function drawAll() {
+    for (var i = 0; i < barcodes.length; i++) {
+      try {
+        JsBarcode('#' + barcodes[i].id, barcodes[i].val, {
+          format: 'CODE128', width: 1.3, height: 26,
+          displayValue: true, fontSize: 9, margin: 2, background: 'transparent'
+        });
+      } catch(e) { console.warn('barcode error', barcodes[i].id, e); }
+    }
+    // تأخير 800ms بعد الرسم لضمان اكتمال التخطيط قبل الطباعة
+    setTimeout(function () { window.print(); }, 800);
   }
-  if(document.readyState === 'complete'){ run(); }
-  else { window.addEventListener('load', run); }
+  if (document.readyState === 'complete') {
+    drawAll();
+  } else {
+    window.addEventListener('load', drawAll);
+  }
 })();
 <\/script>
 </body></html>`;
+    },
+
+    _printBarcode(code, name) {
+        const win = window.open('', '_blank', 'width=420,height=320');
+        if (!win) { this.toast('السماح بالنوافذ المنبثقة في المتصفح', 'error'); return; }
+        win.document.write(`<!DOCTYPE html><html dir="rtl"><head>
+<meta charset="UTF-8"><title>باركود</title>
+<link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"><\/script>
+<style>
+@page { size: 8cm 4cm; margin: 3mm }
+* { box-sizing:border-box; margin:0; padding:0 }
+body { font-family:'Almarai',Arial,sans-serif; background:#fff; display:flex; align-items:center; justify-content:center; min-height:100vh }
+.wrap { text-align:center; padding:3mm }
+.iname { font-size:9pt; font-weight:800; margin-bottom:4px; color:#111 }
+svg { max-width:100%; height:auto !important }
+@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact } }
+</style>
+</head><body>
+<div class="wrap">
+  <div class="iname">${name.replace(/</g,'&lt;')}</div>
+  <svg id="bc"></svg>
+  <div style="font-size:8pt;color:#555;margin-top:3px;font-family:monospace">${code}</div>
+</div>
+<script>
+(function(){
+  function run(){
+    try {
+      JsBarcode('#bc','${code}',{
+        format:'CODE128', width:1.8, height:55,
+        displayValue:true, fontSize:11, font:'Almarai', margin:4, background:'transparent'
+      });
+    } catch(e){}
+    setTimeout(function(){ window.print(); window.close(); }, 600);
+  }
+  if(document.readyState==='complete'){ run(); }
+  else { window.addEventListener('load', run); }
+})();
+<\/script>
+</body></html>`);
+        win.document.close();
     },
 
     // ============ REPORTS ============
@@ -3104,9 +3179,9 @@ updateRetSizes(itemIdx) {
                         </select>
                     </div>
                     <div style="text-align:center;font-size:.78rem;color:var(--ink-mid);margin-bottom:.5rem">— أو أدخل مقاساً جديداً —</div>` : ''}
-                    <div style="display:flex;gap:.5rem">
-                        <input type="text" id="icNewSize" class="form-control-j" placeholder="المقاس (S, M, L, XL...)" style="flex:1" oninput="app._icClearSelect()">
-                        <div style="display:flex;gap:4px;align-items:center;flex:1">
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                        <input type="text" id="icNewSize" class="form-control-j" placeholder="المقاس (S, M, L, XL...)" style="flex:1;min-width:80px" oninput="app._icClearSelect()">
+                        <div style="display:flex;gap:4px;align-items:center;flex:1;min-width:120px">
                             <input type="text" id="icColor" class="form-control-j" placeholder="اللون..." readonly
                                 style="cursor:pointer;border-right:4px solid var(--border);flex:1"
                                 onclick="app.openColorPicker('main','icColor')">
@@ -3114,6 +3189,19 @@ updateRetSizes(itemIdx) {
                                 <i class="fas fa-palette" style="color:var(--gold)"></i>
                             </button>
                         </div>
+                    </div>
+                    <!-- حقل الباركود مع وراثة تلقائية من الصنف -->
+                    <div style="margin-top:.5rem">
+                        <label class="form-label-j" style="font-size:.78rem">
+                            <i class="fas fa-barcode" style="color:var(--gold)"></i>
+                            باركود المقاس
+                            <span style="color:var(--ink-mid);font-weight:400;font-size:.72rem"> — يرث باركود الصنف تلقائياً، قابل للتعديل</span>
+                        </label>
+                        <input type="text" id="icBarcode" class="form-control-j"
+                            placeholder="باركود المقاس..."
+                            value="${item.barcode || ''}"
+                            style="font-family:monospace;font-size:.88rem;background:rgba(201,168,76,.05);border-right:3px solid var(--gold)"
+                            dir="ltr">
                     </div>
                 </div>
 
@@ -3195,10 +3283,9 @@ updateRetSizes(itemIdx) {
         const sel = document.getElementById('icSizeSelect');
         const opt = sel.selectedOptions[0];
         if (!opt || !opt.value) return;
-        // Populate color and size fields from selection
         const color = opt.dataset.color || '';
-        const size = opt.dataset.size || opt.value;
-        const qty = parseInt(opt.dataset.qty) || 0;
+        const size  = opt.dataset.size  || opt.value;
+        const qty   = parseInt(opt.dataset.qty) || 0;
         document.getElementById('icNewSize').value = size;
         // Set color field
         const colorInp = document.getElementById('icColor');
@@ -3208,10 +3295,17 @@ updateRetSizes(itemIdx) {
             colorInp.style.borderRight = `4px solid ${hex || 'var(--border)'}`;
             if (hex) colorInp.dataset.hex = hex;
         }
+        // Fill barcode from existing variation or item barcode
+        const item = this.warehouse[itemId];
+        const bcInp = document.getElementById('icBarcode');
+        if (bcInp && item) {
+            const varKey = opt.value; // the full key e.g. "S - أحمر"
+            const existingBarcode = item.variations?.[varKey]?.barcode || item.barcode || '';
+            bcInp.value = existingBarcode;
+        }
         // Show current balance
         document.getElementById('icCurrentQty').style.display = 'block';
         document.getElementById('icCurrentQtyVal').textContent = qty;
-        // Set real qty to current as starting point
         document.getElementById('icRealQty').value = qty;
         this._icCalcDelta();
     },
@@ -3272,10 +3366,13 @@ updateRetSizes(itemIdx) {
         const item = this.warehouse[itemId]; if (!item) return;
 
         const newSize = document.getElementById('icNewSize')?.value.trim();
-        const color = document.getElementById('icColor')?.value.trim();
+        const color   = document.getElementById('icColor')?.value.trim();
         const realQty = parseInt(document.getElementById('icRealQty')?.value);
-        const reason = document.getElementById('icReason')?.value || 'تصحيح جرد دوري';
-        const notes = document.getElementById('icNotes')?.value.trim() || '';
+        const barcode = document.getElementById('icBarcode')?.value.trim().toUpperCase()
+                        || item.barcode
+                        || ('JW' + Math.random().toString(36).substr(2,6).toUpperCase());
+        const reason  = document.getElementById('icReason')?.value || 'تصحيح جرد دوري';
+        const notes   = document.getElementById('icNotes')?.value.trim() || '';
 
         if (!newSize) { this.toast('يرجى تحديد المقاس', 'error'); return; }
         if (!color)   { this.toast('يرجى تحديد اللون', 'error'); return; }
@@ -3291,9 +3388,7 @@ updateRetSizes(itemIdx) {
             return;
         }
 
-        if (realQty < 0) {
-            this.toast('الكمية لا يمكن أن تكون سالبة', 'error'); return;
-        }
+        if (realQty < 0) { this.toast('الكمية لا يمكن أن تكون سالبة', 'error'); return; }
 
         const confirmMsg = delta > 0
             ? `سيتم إضافة ${delta} قطعة. هل أنت متأكد؟`
@@ -3303,23 +3398,17 @@ updateRetSizes(itemIdx) {
         const updates = {};
         updates[`jawaher_warehouse/${itemId}/sizes/${key}`] = realQty;
 
-        // Store variation info for color display
-        if (!item.variations?.[key]) {
-            const vHex = document.getElementById('icColor')?.dataset?.hex || '';
-            updates[`jawaher_warehouse/${itemId}/variations/${key}`] = {
-                size: newSize, color, hex: vHex,
-                barcode: 'JW' + Math.random().toString(36).substr(2, 6).toUpperCase()
-            };
-        }
-        if (!item.sizeColors?.[key]) {
-            updates[`jawaher_warehouse/${itemId}/sizeColors/${key}`] = color;
-        }
+        // حفظ variation مع الباركود — سواء جديد أو موجود
+        const vHex = document.getElementById('icColor')?.dataset?.hex || this._colorHex(color) || '';
+        updates[`jawaher_warehouse/${itemId}/variations/${key}`] = {
+            size: newSize, color, hex: vHex, barcode
+        };
+        updates[`jawaher_warehouse/${itemId}/sizeColors/${key}`] = color;
 
         await update(ref(db), updates);
 
-        const logDetail = `تصحيح جرد: من ${currentQty} → ${realQty} (فرق: ${delta > 0 ? '+' : ''}${delta}) | اللون: ${color} | المقاس: ${newSize} | السبب: ${reason}${notes ? ' | ملاحظات: ' + notes : ''}`;
+        const logDetail = `تصحيح جرد: من ${currentQty} → ${realQty} (فرق: ${delta > 0 ? '+' : ''}${delta}) | اللون: ${color} | المقاس: ${newSize} | الباركود: ${barcode} | السبب: ${reason}${notes ? ' | ملاحظات: ' + notes : ''}`;
         this.log('stock_correction', itemId, logDetail);
-
         this.toast(`تم تصحيح الجرد بنجاح ✓ (${delta > 0 ? '+' : ''}${delta} قطعة)`, delta >= 0 ? 'success' : 'warning');
         document.getElementById('invCorrModal')?.remove();
     },
