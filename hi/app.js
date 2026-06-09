@@ -1533,7 +1533,7 @@ async updateOrder() {
             }
             await update(ref(db, `jawaher_orders/${id}`), payload);
             this.log('edit', id, 'تعديل بيانات الطلب');
-        this._auditLog('order_edit', id, before, updatedFields, `تعديل طلب ${o.custName}`);
+            this._auditLog('order_edit', id, o, payload, `تعديل طلب ${o.custName}`);
             this.toast('تم حفظ التعديلات بنجاح ✓', 'success');
             this.closeModal('orderModal');
         } catch (err) {
@@ -1658,33 +1658,6 @@ async deductStock(orderId) {
     // ── إرجاع المخزون عند الإلغاء أو التأجيل ──────────────
     async _returnStock(orderId) {
         const o = this.orders[orderId]; if (!o) return;
-        if (!o.stockDeducted) return; // لم يُخصم أصلاً
-
-        const itemsToReturn = o.items || [{ itemId: o.itemId, size: o.exactKey || o.size, exactKey: o.exactKey, itemColor: o.itemColor, qty: o.qty }];
-        const updates = {};
-
-        for (const it of itemsToReturn) {
-            if (!it.itemId) continue;
-            const item = this.warehouse[it.itemId]; if (!item) continue;
-            let key = it.exactKey || it.size;
-            if (item.sizes && item.sizes[key] === undefined && it.itemColor) {
-                if (item.sizes[`${it.size} - ${it.itemColor}`] !== undefined) key = `${it.size} - ${it.itemColor}`;
-            }
-            const current = item.sizes?.[key] || 0;
-            const qty = parseInt(it.qty) || 1;
-            updates[`jawaher_warehouse/${it.itemId}/sizes/${key}`] = current + qty;
-            this.log('stock', orderId, `إرجاع ${qty} قطعة لـ ${item.name} مقاس/لون ${key}`);
-        }
-
-        if (Object.keys(updates).length > 0) {
-            updates[`jawaher_orders/${orderId}/stockDeducted`] = false;
-            await update(ref(db), updates);
-        }
-    },
-
-    // ── إرجاع المخزون عند الإلغاء أو التأجيل ──────────────
-    async _returnStock(orderId) {
-        const o = this.orders[orderId]; if (!o) return;
         if (!o.stockDeducted) return;
         const itemsToReturn = o.items || [{ itemId: o.itemId, size: o.exactKey || o.size, exactKey: o.exactKey, itemColor: o.itemColor, qty: o.qty }];
         const updates = {};
@@ -1732,17 +1705,22 @@ async deductStock(orderId) {
         let barcodeScripts = '';
 
         const labelsHtml = labels.map(({ id, o }, labelIndex) => {
+            if (!o) return '';
             const pageNamesSet = new Set();
             if (o.pageName) pageNamesSet.add(o.pageName);
             (o.items || []).forEach(it => { const w = this.warehouse[it.itemId]; if (w?.pageName) pageNamesSet.add(w.pageName); });
-            const finalPageHeader = pageNamesSet.size > 0 ? Array.from(pageNamesSet).join(' & ') : 'جواهر';
-            const items = o.items || [{ itemName: o.itemName, itemColor: o.itemColor, size: o.size, qty: o.qty, price: o.price }];
+            const finalPageHeader = pageNamesSet.size > 0 ? Array.from(pageNamesSet).join(' & ') : 'شادي ملكاوي';
+            const items = o.items || [{ itemName: o.itemName, itemColor: o.itemColor, size: o.size, qty: o.qty }];
             const bcId = `bc_lbl_${labelIndex}_${id.slice(-6)}`;
-            const bcValue = id.slice(-12);
-            barcodeScripts += `try{JsBarcode("#${bcId}","${bcValue}",{format:"CODE128",width:1.4,height:28,displayValue:true,fontSize:9,margin:2,background:"transparent"});}catch(e){}`;
+            const bcValue = id.slice(-12).toUpperCase();
+            barcodeScripts += `try{JsBarcode("#${bcId}","${bcValue}",{format:"CODE128",width:1.3,height:26,displayValue:true,fontSize:9,margin:2,background:"transparent"});}catch(e){console.warn("BC",e);}`;
 
-            const firstItemW = this.warehouse[items[0]?.itemId];
-            const sellPriceVal = firstItemW?.sellPrice || '';
+            // سعر البيع من أول صنف له سعر
+            let sellPriceVal = '';
+            for (const it of items) {
+                const w = this.warehouse[it.itemId];
+                if (w?.sellPrice) { sellPriceVal = w.sellPrice; break; }
+            }
 
             const contactIcons = {
                 'واتس اب':  { svg: '<svg width="11" height="11" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.557 4.126 1.526 5.858L.057 23.888a.5.5 0 0 0 .617.6l6.162-1.615A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.694-.528-5.217-1.446l-.374-.224-3.878 1.016 1.033-3.772-.244-.389A9.952 9.952 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>', label:'واتساب' },
@@ -1750,65 +1728,76 @@ async deductStock(orderId) {
                 'فيس بوك': { svg: '<svg width="11" height="11" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>', label:'فيسبوك' },
             };
             const chInfo = contactIcons[o.contactChannel];
-            const contactHtml = chInfo ? `<span style="display:inline-flex;align-items:center;gap:2px;font-size:.5rem;font-weight:700">${chInfo.svg} ${chInfo.label}</span>` : '';
-            const weightHtml = (o.weightKg||o.lengthCm) ? `<div style="font-size:.48rem;color:#666;margin-top:1px">${o.weightKg?`⚖ ${o.weightKg}kg`:''} ${o.lengthCm?`📏 ${o.lengthCm}cm`:''}</div>` : '';
+            const contactHtml = chInfo ? `<span style="display:inline-flex;align-items:center;gap:2px;font-size:.5rem;font-weight:700">${chInfo.svg}${chInfo.label}</span>` : '';
+            const weightHtml = (o.weightKg || o.lengthCm) ? `<div style="font-size:.46rem;color:#555;margin-top:1px">${o.weightKg ? `⚖${o.weightKg}kg ` : ''}${o.lengthCm ? `📏${o.lengthCm}cm` : ''}</div>` : '';
 
-            return `<div class="label-page"><div class="label-inner">
-                <div class="lbl-header">
-                    <div class="lbl-pagename">◆ ${finalPageHeader} ◆</div>
-                    <div class="lbl-subheader"><span>📞 077 65 01 333</span><span>👤 ${o.entryUser||''}</span></div>
-                </div>
-                <div class="lbl-body">
-                    <div class="lbl-col lbl-col-right">
-                        <div class="lbl-field"><div class="lbl-field-label">اسم الزبون</div><div class="lbl-field-val lbl-name">${o.custName||''}</div></div>
-                        <div class="lbl-field lbl-field-sm"><div class="lbl-field-label">التواصل</div><div class="lbl-field-val">${contactHtml||'—'}</div></div>
-                        <div class="lbl-field"><div class="lbl-field-label">الصنف</div><div class="lbl-field-val lbl-item">${items.map(it=>it.itemName||'').join(' ، ')}</div></div>
-                        <div class="lbl-field lbl-field-sm"><div class="lbl-field-label">اللون</div><div class="lbl-field-val">${items.map(it=>it.itemColor||'').join('،')||'—'}</div></div>
-                        <div class="lbl-field lbl-field-sm"><div class="lbl-field-label">المقاس</div><div class="lbl-field-val">${items.map(it=>it.size||'').filter(Boolean).join('،')||'—'}</div></div>
-                        ${sellPriceVal?`<div class="lbl-field lbl-field-sm"><div class="lbl-field-label">سعر القطعة</div><div class="lbl-field-val" style="color:#1A6B4A;font-weight:700">${sellPriceVal} JOD</div></div>`:''}
-                        ${weightHtml}
-                    </div>
-                    <div class="lbl-col lbl-col-left">
-                        <div class="lbl-field"><div class="lbl-field-label">عنوان الزبون</div><div class="lbl-field-val lbl-addr">${o.governorate?o.governorate+' - ':''}${o.custAddr||'—'}</div></div>
-                        <div class="lbl-field"><div class="lbl-field-label">رقم الهاتف</div><div class="lbl-field-val lbl-phone" dir="ltr">${o.custMob||''}</div></div>
-                        <div class="lbl-field lbl-price-box"><div class="lbl-field-label" style="color:#1A6B4A">القيمة شامل</div><div class="lbl-field-val lbl-price">${o.price||0} JOD</div></div>
-                        <div class="lbl-field" style="flex:1"><div class="lbl-field-label">ملاحظات</div><div class="lbl-field-val lbl-notes">${o.tags||''}</div></div>
-                        <div class="lbl-warning">⚠ يُمنع فتح الطرد</div>
-                    </div>
-                </div>
-                <div class="lbl-barcode-wrap"><svg id="${bcId}"></svg></div>
-            </div></div>`;
+            const itemNames  = items.map(it => it.itemName || '').filter(Boolean).join(' ، ');
+            const itemColors = items.map(it => it.itemColor || '').filter(Boolean).join('، ') || '—';
+            const itemSizes  = items.map(it => it.size || '').filter(Boolean).join('، ') || '—';
+
+            return `<div class="label-page">
+  <div class="label-inner">
+    <div class="lbl-hdr">
+      <div class="lbl-pgname">◆ ${finalPageHeader} ◆</div>
+      <div class="lbl-subhdr"><span>📞 077 65 01 333</span><span>👤 ${o.entryUser || ''}</span></div>
+    </div>
+    <div class="lbl-body">
+      <div class="lbl-col lbl-col-r">
+        <div class="lbl-f"><div class="lbl-fl">اسم الزبون</div><div class="lbl-fv lbl-name">${o.custName || ''}</div></div>
+        <div class="lbl-f lbl-fsm"><div class="lbl-fl">التواصل</div><div class="lbl-fv">${contactHtml || '—'}</div></div>
+        <div class="lbl-f"><div class="lbl-fl">الصنف</div><div class="lbl-fv lbl-item">${itemNames}</div></div>
+        <div class="lbl-f lbl-fsm"><div class="lbl-fl">اللون</div><div class="lbl-fv">${itemColors}</div></div>
+        <div class="lbl-f lbl-fsm"><div class="lbl-fl">المقاس</div><div class="lbl-fv">${itemSizes}</div></div>
+        ${sellPriceVal ? `<div class="lbl-f lbl-fsm"><div class="lbl-fl">سعر القطعة</div><div class="lbl-fv" style="color:#1A6B4A;font-weight:800">${sellPriceVal} JOD</div></div>` : ''}
+        ${weightHtml}
+      </div>
+      <div class="lbl-col lbl-col-l">
+        <div class="lbl-f"><div class="lbl-fl">عنوان الزبون</div><div class="lbl-fv lbl-addr">${o.governorate ? o.governorate + ' - ' : ''}${o.custAddr || '—'}</div></div>
+        <div class="lbl-f"><div class="lbl-fl">رقم الهاتف</div><div class="lbl-fv lbl-phone" dir="ltr">${o.custMob || ''}</div></div>
+        <div class="lbl-f lbl-price-box"><div class="lbl-fl" style="color:#1A6B4A">القيمة شامل</div><div class="lbl-fv lbl-price">${o.price || 0} JOD</div></div>
+        <div class="lbl-f" style="flex:1;overflow:hidden"><div class="lbl-fl">ملاحظات</div><div class="lbl-fv lbl-notes">${o.tags || ''}</div></div>
+        <div class="lbl-warn">⚠ يُمنع فتح الطرد</div>
+      </div>
+    </div>
+    <div class="lbl-bc"><svg id="${bcId}"></svg></div>
+  </div>
+</div>`;
         }).join('');
 
         const css = `
-            @page{size:10cm 10cm;margin:0}
-            *{box-sizing:border-box;margin:0;padding:0}
-            body{font-family:'Almarai',Arial,sans-serif;background:#fff;margin:0}
-            @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.label-page{page-break-after:always;page-break-inside:avoid}.label-page:last-child{page-break-after:auto}}
-            .label-page{width:10cm;height:10cm;display:flex;align-items:stretch;padding:2.5mm;overflow:hidden}
-            .label-inner{width:100%;display:flex;flex-direction:column;border:2px solid #1A3A8F;border-radius:5px;overflow:hidden}
-            .lbl-header{background:#0F2260;color:#fff;padding:2.5px 6px;border-bottom:2px solid #1A3A8F;flex-shrink:0}
-            .lbl-pagename{font-size:8.5pt;font-weight:800;color:#7AA0F0;text-align:center;letter-spacing:.4px}
-            .lbl-subheader{display:flex;justify-content:center;gap:8px;font-size:5pt;color:#aaa;margin-top:1px}
-            .lbl-body{flex:1;display:grid;grid-template-columns:1fr 1fr;overflow:hidden;min-height:0}
-            .lbl-col{display:flex;flex-direction:column;gap:1.5px;padding:3px;overflow:hidden}
-            .lbl-col-right{border-left:1px solid #ccd}
-            .lbl-field{background:#f4f6ff;border:1px solid #dde;border-radius:3px;padding:2px 5px;overflow:hidden}
-            .lbl-field-sm{flex-shrink:0}
-            .lbl-field-label{font-size:4.2pt;color:#888;line-height:1.2}
-            .lbl-field-val{font-size:6.5pt;font-weight:700;color:#111;line-height:1.25;overflow:hidden}
-            .lbl-name{font-size:8pt;font-weight:800}
-            .lbl-item{font-size:7pt;font-weight:800}
-            .lbl-addr{font-size:6pt}
-            .lbl-phone{font-size:8.5pt;font-weight:800;text-align:right}
-            .lbl-price-box{background:#e6f4ed!important;border-color:#1A6B4A!important}
-            .lbl-price{font-size:10pt;font-weight:800;color:#1A6B4A}
-            .lbl-notes{font-size:5.5pt;font-weight:600}
-            .lbl-warning{background:#FFF0F0;border:1.5px solid #C02525;border-radius:3px;padding:2px 5px;font-size:6pt;font-weight:800;color:#C02525;text-align:center;flex-shrink:0}
-            .lbl-barcode-wrap{text-align:center;padding:1px 4px 2px;border-top:1px solid #dde;flex-shrink:0;background:#fff;min-height:36px;display:flex;align-items:center;justify-content:center}
-            .lbl-barcode-wrap svg{max-width:100%;height:auto!important}`;
+@page { size: 10cm 10cm; margin: 0 }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+html, body { width: 10cm; background: #fff; font-family: 'Almarai', Arial, sans-serif }
+@media print {
+  html, body { width: 10cm }
+  .label-page { page-break-after: always; page-break-inside: avoid }
+  .label-page:last-child { page-break-after: auto }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact }
+}
+.label-page { width: 10cm; height: 10cm; display: flex; align-items: stretch; padding: 2.5mm; overflow: hidden }
+.label-inner { width: 100%; display: flex; flex-direction: column; border: 2px solid #1A3A8F; border-radius: 5px; overflow: hidden }
+.lbl-hdr { background: #0F2260; color: #fff; padding: 2.5px 6px; border-bottom: 1.5px solid #1A3A8F; flex-shrink: 0 }
+.lbl-pgname { font-size: 8.5pt; font-weight: 800; color: #7AA0F0; text-align: center; letter-spacing: .4px }
+.lbl-subhdr { display: flex; justify-content: center; gap: 8px; font-size: 5pt; color: #aabde0; margin-top: 1px }
+.lbl-body { flex: 1; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; min-height: 0 }
+.lbl-col { display: flex; flex-direction: column; gap: 1.5px; padding: 3px; overflow: hidden; min-width: 0 }
+.lbl-col-r { border-left: 1px solid #ccd }
+.lbl-f { background: #f4f6ff; border: 1px solid #dde; border-radius: 3px; padding: 1.5px 4px; overflow: hidden; min-height: 0; flex-shrink: 1 }
+.lbl-fsm { flex-shrink: 0 }
+.lbl-fl { font-size: 4pt; color: #888; line-height: 1.2 }
+.lbl-fv { font-size: 6.5pt; font-weight: 700; color: #111; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.lbl-name { font-size: 8pt; font-weight: 800; white-space: normal; line-height: 1.15 }
+.lbl-item { font-size: 6.5pt; font-weight: 800; white-space: normal; line-height: 1.15 }
+.lbl-addr { font-size: 6pt; white-space: normal; line-height: 1.2 }
+.lbl-phone { font-size: 8.5pt; font-weight: 800; text-align: right }
+.lbl-price-box { background: #e6f4ed !important; border-color: #1A6B4A !important; flex-shrink: 0 }
+.lbl-price { font-size: 10pt; font-weight: 800; color: #1A6B4A }
+.lbl-notes { font-size: 5.5pt; white-space: normal; line-height: 1.2 }
+.lbl-warn { background: #FFF0F0; border: 1.5px solid #C02525; border-radius: 3px; padding: 1.5px 4px; font-size: 6pt; font-weight: 800; color: #C02525; text-align: center; flex-shrink: 0; margin-top: auto }
+.lbl-bc { text-align: center; padding: 1px 4px 2px; border-top: 1px solid #dde; flex-shrink: 0; background: #fff; min-height: 34px; display: flex; align-items: center; justify-content: center }
+.lbl-bc svg { max-width: 100%; height: auto !important }`;
 
-        return `<!DOCTYPE html><html dir="rtl"><head>
+        return `<!DOCTYPE html><html dir="rtl" lang="ar"><head>
 <meta charset="UTF-8"><title>بوليصة طباعة</title>
 <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"><\/script>
@@ -1816,10 +1805,14 @@ async deductStock(orderId) {
 </head><body>
 ${labelsHtml}
 <script>
-window.onload=function(){
+(function(){
+  function run(){
     ${barcodeScripts}
-    setTimeout(function(){window.print();},600);
-};
+    setTimeout(function(){ window.print(); }, 700);
+  }
+  if(document.readyState === 'complete'){ run(); }
+  else { window.addEventListener('load', run); }
+})();
 <\/script>
 </body></html>`;
     },
@@ -2030,7 +2023,7 @@ window.onload=function(){
                     <input type="text"   id="nim_color_${i}" class="form-control-j nim-c-val" placeholder="اللون" readonly
                         style="width:80px;cursor:pointer;font-size:.8rem;border-right:4px solid ${hex || 'var(--border)'}"
                         value="${c}" data-hex="${hex}" onclick="app.openColorPicker(${i},'nim_color')">
-                    <input type="text"   class="form-control-j nim-b-val" placeholder="${mainBarcode || 'باركود (اختياري)'}" value="${b}" style="flex:1;min-width:100px;font-size:.85rem;font-family:monospace;background:${b&&b===mainBarcode?'rgba(201,168,76,.06)':'الinherit'}" dir="ltr" title="يرث باركود المنتج تلقائياً">
+                    <input type="text"   class="form-control-j nim-b-val" placeholder="${mainBarcode || 'باركود (اختياري)'}" value="${b}" style="flex:1;min-width:100px;font-size:.85rem;font-family:monospace;background:${b && b === mainBarcode ? 'rgba(201,168,76,.06)' : 'inherit'}" dir="ltr" title="يرث باركود المنتج تلقائياً — قابل للتعديل">
                     <input type="number" class="form-control-j nim-q-val" placeholder="كمية" min="0" value="0" style="width:65px">
                     <button class="btn-j btn-ruby btn-xs-j" onclick="app.removeNimSizeRow(${i})" style="flex-shrink:0;padding:.3rem .5rem"><i class="fas fa-times"></i></button>
                 </div>
@@ -2359,10 +2352,39 @@ window.onload=function(){
                 <div class="modal-title">${name}</div>
                 <div class="barcode-label mb-3"><svg id="barcodeModal"></svg></div>
                 <p style="font-size:.85rem;color:var(--ink-mid)">${code}</p>
-                <button class="btn-j btn-gold w-100" onclick="window.print()"><i class="fas fa-print"></i> طباعة الباركود</button>
+                <button class="btn-j btn-gold w-100" onclick="app._printBarcode('${code}','${name.replace(/'/g,"\\'")}')"><i class="fas fa-print"></i> طباعة الباركود</button>
             </div>`;
         document.body.appendChild(modal);
         JsBarcode('#barcodeModal', code, { format: 'CODE128', width: 2, height: 70, displayValue: true, font: 'Almarai' });
+    },
+
+    _printBarcode(code, name) {
+        const win = window.open('', '_blank', 'width=400,height=300');
+        win.document.write(`<!DOCTYPE html><html dir="rtl"><head>
+<meta charset="UTF-8"><title>باركود</title>
+<link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"><\/script>
+<style>
+  @page{size:8cm 4cm;margin:4mm}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Almarai',Arial,sans-serif;background:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh}
+  .wrap{text-align:center;padding:4mm}
+  .item-name{font-size:9pt;font-weight:800;margin-bottom:4px;color:#111}
+  svg{max-width:100%;height:auto!important}
+</style>
+</head><body>
+<div class="wrap">
+  <div class="item-name">${name}</div>
+  <svg id="bc"></svg>
+</div>
+<script>
+window.onload=function(){
+  JsBarcode('#bc','${code}',{format:'CODE128',width:1.8,height:55,displayValue:true,fontSize:11,font:'Almarai',margin:4,background:'transparent'});
+  setTimeout(function(){window.print();window.close();},400);
+};
+<\/script>
+</body></html>`);
+        win.document.close();
     },
 
     // ============ PURCHASE BARCODE ============
