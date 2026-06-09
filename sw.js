@@ -2,7 +2,7 @@
 // sw.js — Jawaher Service Worker
 // ============================================================
 
-const CACHE_NAME = 'malkawi-v150';
+const CACHE_NAME = 'malkawi-v160';
 
 const SHELL = [
     './',

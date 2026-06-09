@@ -539,7 +539,7 @@ body {
 .kpi-ruby      { background: linear-gradient(145deg, #C82558, #7A1830); box-shadow: 0 8px 32px rgba(192,37,86,.2); }
 .kpi-emerald   { background: linear-gradient(145deg, #259A68, #0E5835); box-shadow: 0 8px 32px rgba(26,107,74,.2); }
 .kpi-sapphire  { background: linear-gradient(145deg, #2558C0, #102860); box-shadow: 0 8px 32px rgba(26,58,107,.2); }
-.kpi-amethyst  { background: linear-gradient(145deg, #7A2AC0, #3C0E80); box-shadow: 0 8px 32px rgba(122,42,192,.2); }
+.kpi-amethyst  { background: linear-gradient(145deg, #8B3DD4, #5A1FA0); box-shadow: 0 8px 32px rgba(122,42,192,.25); }
 .kpi-onyx      { background: linear-gradient(145deg, #3A3A58, #1A1A2E); box-shadow: 0 8px 32px rgba(26,26,46,.3); }
 
 /* ============ FORM ELEMENTS ============ */
@@ -1220,17 +1220,10 @@ body {
     gap: 5px;
 }
 
-/* kpi-amethyst color for VIP count */
-.kpi-amethyst {
-    background: linear-gradient(135deg, rgba(74,26,107,.12) 0%, rgba(74,26,107,.04) 100%);
-    border: 1px solid rgba(74,26,107,.2);
-}
-.kpi-amethyst .kpi-value { color: #7B2FBE; }
-.kpi-amethyst .kpi-icon  { color: #7B2FBE; }
-
+/* kpi-amethyst: inherited from main gradient above */
 [data-theme="dark"] .kpi-amethyst {
-    background: linear-gradient(135deg, rgba(123,47,190,.18) 0%, rgba(123,47,190,.06) 100%);
-    border-color: rgba(123,47,190,.25);
+    background: linear-gradient(145deg, #9B4DE0, #6A28B8);
+    box-shadow: 0 8px 32px rgba(155,77,224,.3);
 }
 
 /* ============================================================

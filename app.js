@@ -249,7 +249,7 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
                             display:flex;align-items:center;justify-content:center;
                             font-weight:800;font-size:.85rem;color:#1A1A2E;
                         ">${a.u[0].toUpperCase()}</div>
-                        <span style="flex:1;color:#111;font-size:.88rem;">${a.u}</span>
+                        <span style="flex:1;color:rgba(255,255,255,.8);font-size:.88rem;">${a.u}</span>
                         <button onclick="event.stopPropagation();app._removeAccount('${a.u}')" style="
                             background:none;border:none;color:rgba(255,255,255,.3);
                             cursor:pointer;font-size:.8rem;padding:.2rem .4rem;
@@ -2275,7 +2275,7 @@ svg { max-width:100%; height:auto !important }
                                         ${vColor ? `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${colorHex};border:1px solid rgba(0,0,0,.15);flex-shrink:0"></span><span style="font-size:.78rem;color:var(--ink-mid)">${vColor}</span>` : ''}
                                         <span style="${q === 0 ? 'color:var(--ruby)' : 'color:var(--ink)'}">: <strong>${q}</strong> قطعة</span>
                                     </div>
-                                    <div style="font-size:.7rem;font-family:monospace;background:var(--paper);padding:4px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer" onclick="app.showBarcode('${vCode}','${w.name} - ${dispSize}')" title="طباعة الباركود">
+                                    <div style="font-size:.7rem;font-family:monospace;background:var(--paper);padding:4px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer" onclick="app.showBarcode('${vCode}','${w.name}','${dispSize}','${vColor}','${w.pageName||''}')" title="طباعة الباركود">
                                         <i class="fas fa-barcode" style="color:var(--gold)"></i> ${vCode}
                                     </div>
                                 </div>`;
@@ -2418,45 +2418,96 @@ svg { max-width:100%; height:auto !important }
         this.toast('تم حذف المنتج', 'success');
     },
 
-    showBarcode(code, name) {
+    showBarcode(code, itemName, size, color, pageName) {
+        // دعم الاستدعاء القديم (code, name)
+        if (size === undefined) {
+            const parts = (itemName || '').split(' - ');
+            size     = parts.slice(1).join(' - ') || '';
+            itemName = parts[0] || '';
+        }
+        const colorHex  = this._colorHex(color) || '';
+        const colorDot  = colorHex
+            ? `<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${colorHex};border:1px solid rgba(0,0,0,.15);vertical-align:middle;margin-left:4px"></span>`
+            : '';
         const modal = document.createElement('div');
         modal.className = 'modal-j open';
-        modal.innerHTML = `<div class="modal-overlay" onclick="this.parentElement.remove()"></div>
-            <div class="modal-sheet" style="max-width:400px;text-align:center">
-                <div class="modal-handle"></div>
-                <div class="modal-title">${name}</div>
-                <div class="barcode-label mb-3"><svg id="barcodeModal"></svg></div>
-                <p style="font-size:.85rem;color:var(--ink-mid)">${code}</p>
-                <button class="btn-j btn-gold w-100" onclick="app._printBarcode('${code}','${name.replace(/'/g,"\\'")}')"><i class="fas fa-print"></i> طباعة الباركود</button>
-            </div>`;
+        modal.innerHTML = `
+        <div class="modal-overlay" onclick="this.parentElement.remove()"></div>
+        <div class="modal-sheet" style="max-width:370px;text-align:center">
+            <div class="modal-handle"></div>
+            <div class="modal-title" style="font-size:1rem;margin-bottom:.5rem">${itemName}</div>
+            ${size     ? `<div style="font-size:.82rem;color:var(--ink-mid);margin-bottom:2px">المقاس: <strong>${size}</strong></div>` : ''}
+            ${color    ? `<div style="font-size:.82rem;color:var(--ink-mid);margin-bottom:2px">${colorDot}اللون: <strong>${color}</strong></div>` : ''}
+            ${pageName ? `<div style="font-size:.78rem;color:var(--gold);margin-bottom:.75rem"><i class="fas fa-file-alt" style="font-size:.7rem;margin-left:3px"></i>${pageName}</div>` : '<div style="margin-bottom:.75rem"></div>'}
+            <div style="background:#fff;border-radius:8px;padding:.5rem;border:1px solid var(--border);margin-bottom:.75rem">
+                <svg id="barcodeModal"></svg>
+                <div style="font-size:.75rem;color:#777;font-family:monospace;margin-top:2px">${code}</div>
+            </div>
+            <button class="btn-j btn-gold w-100" onclick="app._printBarcode('${code}','${(itemName||'').replace(/'/g,"\\'")}','${(size||'').replace(/'/g,"\\'")}','${(color||'').replace(/'/g,"\\'")}','${(pageName||'').replace(/'/g,"\\'")}')">
+                <i class="fas fa-print"></i> طباعة الباركود
+            </button>
+        </div>`;
         document.body.appendChild(modal);
-        JsBarcode('#barcodeModal', code, { format: 'CODE128', width: 2, height: 70, displayValue: true, font: 'Almarai' });
+        JsBarcode('#barcodeModal', code, { format:'CODE128', width:2, height:60, displayValue:true, font:'Almarai' });
     },
 
-    _printBarcode(code, name) {
-        const win = window.open('', '_blank', 'width=400,height=300');
-        win.document.write(`<!DOCTYPE html><html dir="rtl"><head>
-<meta charset="UTF-8"><title>باركود</title>
-<link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700&display=swap" rel="stylesheet">
+    _printBarcode(code, itemName, size, color, pageName) {
+        const win = window.open('', '_blank', 'width=460,height=340');
+        if (!win) { this.toast('فعّل النوافذ المنبثقة في المتصفح', 'error'); return; }
+
+        const colorHex   = this._colorHex(color) || '';
+        const colorSwatch = colorHex
+            ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${colorHex};border:1px solid rgba(0,0,0,.15);vertical-align:middle;margin-left:3px"></span>`
+            : '';
+
+        const rows = [
+            itemName ? `<tr><td class="lbl">الصنف</td><td class="val">${itemName}</td></tr>`      : '',
+            size     ? `<tr><td class="lbl">المقاس</td><td class="val"><strong>${size}</strong></td></tr>` : '',
+            color    ? `<tr><td class="lbl">اللون</td><td class="val">${colorSwatch}${color}</td></tr>`    : '',
+            pageName ? `<tr><td class="lbl">الصفحة</td><td class="val" style="color:#9A5500">${pageName}</td></tr>` : '',
+        ].filter(Boolean).join('');
+
+        win.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head>
+<meta charset="UTF-8"><title>باركود — ${itemName} ${size}</title>
+<link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"><\/script>
 <style>
-  @page{size:8cm 4cm;margin:4mm}
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Almarai',Arial,sans-serif;background:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh}
-  .wrap{text-align:center;padding:4mm}
-  .item-name{font-size:9pt;font-weight:800;margin-bottom:4px;color:#111}
-  svg{max-width:100%;height:auto!important}
+  @page { size:9cm 5cm; margin:0 }
+  *,*::before,*::after { box-sizing:border-box; margin:0; padding:0 }
+  html,body { width:9cm; height:5cm; background:#fff; font-family:'Almarai',Arial,sans-serif }
+  @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact } }
+  body { display:flex; align-items:center; justify-content:center }
+  .card { width:9cm; height:5cm; border:1.5px solid #1A3A8F; border-radius:4px; display:flex; flex-direction:column; padding:2.5mm; overflow:hidden }
+  .hdr  { background:#0F2260; color:#7AA0F0; font-size:7pt; font-weight:800; text-align:center; padding:2px 4px; border-radius:3px; margin-bottom:2mm; flex-shrink:0; letter-spacing:.3px }
+  .body { display:flex; gap:2.5mm; flex:1; min-height:0; align-items:center }
+  .info { flex:1; min-width:0 }
+  .info table { width:100%; border-collapse:collapse }
+  .lbl  { font-size:6pt; color:#888; width:30%; white-space:nowrap; padding-bottom:2px }
+  .val  { font-size:6.5pt; color:#111; font-weight:700; padding-right:3px; padding-bottom:2px }
+  .bc   { flex-shrink:0; text-align:center }
+  .bc svg { width:95px !important; height:auto !important }
+  .code { font-size:5.5pt; color:#666; text-align:center; font-family:monospace; margin-top:1.5mm; flex-shrink:0; letter-spacing:.5px }
 </style>
 </head><body>
-<div class="wrap">
-  <div class="item-name">${name}</div>
-  <svg id="bc"></svg>
+<div class="card">
+  <div class="hdr">◆ شادي ملكاوي — ملصق الصنف ◆</div>
+  <div class="body">
+    <div class="info"><table>${rows}</table></div>
+    <div class="bc"><svg id="bc"></svg></div>
+  </div>
+  <div class="code">${code}</div>
 </div>
 <script>
-window.onload=function(){
-  JsBarcode('#bc','${code}',{format:'CODE128',width:1.8,height:55,displayValue:true,fontSize:11,font:'Almarai',margin:4,background:'transparent'});
-  setTimeout(function(){window.print();window.close();},400);
-};
+(function(){
+  function run(){
+    try{
+      JsBarcode('#bc','${code}',{format:'CODE128',width:1.5,height:44,displayValue:false,margin:2,background:'transparent'});
+    }catch(e){}
+    setTimeout(function(){ window.print(); window.close(); }, 700);
+  }
+  if(document.readyState==='complete'){ run(); }
+  else { window.addEventListener('load', run); }
+})();
 <\/script>
 </body></html>`);
         win.document.close();
