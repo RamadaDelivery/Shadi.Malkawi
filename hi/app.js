@@ -470,14 +470,6 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
             });
         }
 
-        // ── Custom Colors listener ────────────────────────────
-        onValue(customColorsRef, snap => {
-            const data = snap.val() || {};
-            this.customColors = Object.values(data).map(c => ({
-                name: c.name, hex: c.hex, border: c.border || c.hex, custom: true
-            }));
-        });
-
         // ── Custom Colors listener ───────────────────────
         onValue(customColorsRef, snap => {
             const data = snap.val() || {};
@@ -822,6 +814,13 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
             document.getElementById('customColorModal').remove();
             this.toast(`تم إضافة اللون "${name}" ✓`, 'success');
         };
+    },
+
+    _colorHex(name) {
+        if (!name) return null;
+        if (name.startsWith('#')) return name;
+        const found = this._allColors().find(c => c.name === name);
+        return found?.hex || null;
     },
 
     // Returns an inline style string for background (handles gradients)
