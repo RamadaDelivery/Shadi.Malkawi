@@ -1772,7 +1772,7 @@ async deductStock(orderId) {
         <div class="lwarn">⚠ يُمنع فتح الطرد</div>
       </div>
     </div>
-    <div class="lbc"><svg id="${bcId}"></svg></div>
+    <div class="lbc"><svg id="${bcId}"></svg>${sellPrice ? `<div class="lbc-price">${sellPrice} JOD</div>` : ''}</div>
   </div>
 </div>`;
             return { html, bcId, bcVal };
@@ -1796,26 +1796,27 @@ body { margin: 0 }
 }
 .lp  { width:10cm; height:10cm; display:flex; align-items:stretch; padding:2.5mm; overflow:hidden }
 .li  { width:100%; display:flex; flex-direction:column; border:2px solid #1A3A8F; border-radius:5px; overflow:hidden }
-.lh  { background:#0F2260; color:#fff; padding:2.5px 6px; border-bottom:1.5px solid #1A3A8F; flex-shrink:0 }
-.lpn { font-size:8.5pt; font-weight:800; color:#7AA0F0; text-align:center; letter-spacing:.4px }
-.lsh { display:flex; justify-content:center; gap:8px; font-size:5pt; color:#aabde0; margin-top:1px }
+.lh  { background:#0F2260; color:#fff; padding:3px 6px; border-bottom:1.5px solid #1A3A8F; flex-shrink:0 }
+.lpn { font-size:10pt; font-weight:800; color:#7AA0F0; text-align:center; letter-spacing:.4px }
+.lsh { display:flex; justify-content:center; gap:8px; font-size:6pt; color:#aabde0; margin-top:1px }
 .lb  { flex:1; display:grid; grid-template-columns:1fr 1fr; overflow:hidden; min-height:0 }
 .lc  { display:flex; flex-direction:column; gap:1.5px; padding:3px; overflow:hidden; min-width:0 }
 .lcr { border-left:1px solid #ccd }
-.lf  { background:#f4f6ff; border:1px solid #dde; border-radius:3px; padding:1.5px 4px; overflow:hidden; flex-shrink:1 }
+.lf  { background:#f4f6ff; border:1px solid #dde; border-radius:3px; padding:2px 4px; overflow:hidden; flex-shrink:1 }
 .lfsm { flex-shrink:0 }
-.lfl  { font-size:4pt; color:#888; line-height:1.2 }
-.lfv  { font-size:6.5pt; font-weight:700; color:#111; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-.lname  { font-size:8pt;   font-weight:800; white-space:normal; line-height:1.15 }
-.litem  { font-size:6.5pt; font-weight:800; white-space:normal; line-height:1.15 }
-.laddr  { font-size:6pt;   white-space:normal; line-height:1.2 }
-.lphone { font-size:8.5pt; font-weight:800; text-align:right }
+.lfl  { font-size:5.5pt; color:#555; font-weight:700; line-height:1.2 }
+.lfv  { font-size:7pt; font-weight:700; color:#111; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.lname  { font-size:9pt;   font-weight:800; white-space:normal; line-height:1.15 }
+.litem  { font-size:7.5pt; font-weight:800; white-space:normal; line-height:1.15 }
+.laddr  { font-size:6.5pt; white-space:normal; line-height:1.2 }
+.lphone { font-size:9.5pt; font-weight:800; text-align:right }
 .lprice-box { background:#e6f4ed !important; border-color:#1A6B4A !important; flex-shrink:0 }
-.lprice { font-size:10pt; font-weight:800; color:#1A6B4A }
-.lnotes { font-size:5.5pt; white-space:normal; line-height:1.2 }
-.lwarn  { background:#FFF0F0; border:1.5px solid #C02525; border-radius:3px; padding:1.5px 4px; font-size:6pt; font-weight:800; color:#C02525; text-align:center; flex-shrink:0; margin-top:auto }
-.lbc    { text-align:center; padding:1px 4px 2px; border-top:1px solid #dde; flex-shrink:0; background:#fff; min-height:34px; display:flex; align-items:center; justify-content:center }
-.lbc svg { max-width:100%; height:auto !important }`;
+.lprice { font-size:11pt; font-weight:800; color:#1A6B4A }
+.lnotes { font-size:6pt; white-space:normal; line-height:1.2 }
+.lwarn  { background:#FFF0F0; border:1.5px solid #C02525; border-radius:3px; padding:2px 4px; font-size:6.5pt; font-weight:800; color:#C02525; text-align:center; flex-shrink:0; margin-top:auto }
+.lbc    { text-align:center; padding:1px 4px 2px; border-top:1px solid #dde; flex-shrink:0; background:#fff; display:flex; align-items:center; justify-content:center; gap:6px }
+.lbc svg { max-width:100%; height:auto !important }
+.lbc-price { font-size:9pt; font-weight:800; color:#1A6B4A; white-space:nowrap; border:1.5px solid #1A6B4A; border-radius:4px; padding:1px 6px; background:#e6f4ed }`;
 
         // الطباعة: نرسم كل الباركودات أولاً ثم نطبع بعد تأخير كافٍ
         return `<!DOCTYPE html><html dir="rtl" lang="ar"><head>
@@ -1849,47 +1850,6 @@ ${labelsHtml}
 })();
 <\/script>
 </body></html>`;
-    },
-
-    _printBarcode(code, name) {
-        const win = window.open('', '_blank', 'width=420,height=320');
-        if (!win) { this.toast('السماح بالنوافذ المنبثقة في المتصفح', 'error'); return; }
-        win.document.write(`<!DOCTYPE html><html dir="rtl"><head>
-<meta charset="UTF-8"><title>باركود</title>
-<link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"><\/script>
-<style>
-@page { size: 8cm 4cm; margin: 3mm }
-* { box-sizing:border-box; margin:0; padding:0 }
-body { font-family:'Almarai',Arial,sans-serif; background:#fff; display:flex; align-items:center; justify-content:center; min-height:100vh }
-.wrap { text-align:center; padding:3mm }
-.iname { font-size:9pt; font-weight:800; margin-bottom:4px; color:#111 }
-svg { max-width:100%; height:auto !important }
-@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact } }
-</style>
-</head><body>
-<div class="wrap">
-  <div class="iname">${name.replace(/</g,'&lt;')}</div>
-  <svg id="bc"></svg>
-  <div style="font-size:8pt;color:#555;margin-top:3px;font-family:monospace">${code}</div>
-</div>
-<script>
-(function(){
-  function run(){
-    try {
-      JsBarcode('#bc','${code}',{
-        format:'CODE128', width:1.8, height:55,
-        displayValue:true, fontSize:11, font:'Almarai', margin:4, background:'transparent'
-      });
-    } catch(e){}
-    setTimeout(function(){ window.print(); window.close(); }, 600);
-  }
-  if(document.readyState==='complete'){ run(); }
-  else { window.addEventListener('load', run); }
-})();
-<\/script>
-</body></html>`);
-        win.document.close();
     },
 
     // ============ REPORTS ============
@@ -2250,12 +2210,18 @@ svg { max-width:100%; height:auto !important }
                             <span class="item-qty-value">${total} <small style="font-size:.8rem;font-weight:400;color:var(--ink-mid)">قطعة</small></span>
                         </div>
                         <div class="item-qty-bar"><div class="item-qty-fill ${fillCls}" style="width:${Math.min(total > 0 ? Math.round(total / Math.max(total, 20) * 100) : 0, 100)}%"></div></div>
-                        ${(w.buyPrice || w.sellPrice) ? `
-                        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem">
-                            ${w.buyPrice ? `<div style="background:var(--paper-warm);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:.74rem"><span style="color:var(--ink-mid)">شراء</span> <strong>${w.buyPrice} JOD</strong></div>` : ''}
-                            ${w.sellPrice ? `<div style="background:rgba(26,107,74,.08);border:1px solid rgba(26,107,74,.25);border-radius:8px;padding:4px 10px;font-size:.74rem"><span style="color:var(--emerald)">بيع</span> <strong style="color:var(--emerald)">${w.sellPrice} JOD</strong></div>` : ''}
-                        </div>` : ''}
-                        ${w.notes ? `<div style="background:rgba(201,168,76,.06);border-right:3px solid var(--gold);border-radius:0 8px 8px 0;padding:5px 10px;font-size:.76rem;color:var(--ink-mid);margin-bottom:.5rem"><i class="fas fa-sticky-note" style="color:var(--gold);margin-left:4px"></i>${w.notes}</div>` : ''}
+                        <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.5rem">
+                            <div style="background:rgba(26,107,74,.08);border:1px solid rgba(26,107,74,.25);border-radius:8px;padding:4px 10px;font-size:.74rem;display:flex;align-items:center;gap:5px">
+                                <span style="color:var(--emerald)">سعر البيع</span>
+                                <strong style="color:var(--emerald)">${w.sellPrice ? w.sellPrice + ' JOD' : '—'}</strong>
+                                <span style="cursor:pointer;color:var(--gold);font-size:.72rem;margin-right:2px" onclick="app.inlineEditSellPrice('${id}')" title="تعديل سعر البيع"><i class="fas fa-pencil-alt"></i></span>
+                            </div>
+                        </div>
+                        <div style="background:rgba(201,168,76,.06);border-right:3px solid var(--gold);border-radius:0 8px 8px 0;padding:5px 10px;font-size:.76rem;color:var(--ink-mid);margin-bottom:.5rem;display:flex;align-items:center;gap:6px">
+                            <i class="fas fa-sticky-note" style="color:var(--gold)"></i>
+                            <span style="flex:1">${w.notes || '<span style="opacity:.45">لا توجد ملاحظة</span>'}</span>
+                            <span style="cursor:pointer;color:var(--gold);font-size:.72rem" onclick="app.inlineEditNotes('${id}')" title="تعديل الملاحظة"><i class="fas fa-pencil-alt"></i></span>
+                        </div>
                         <div class="item-sizes mb-3">
                             ${sizes.length === 0 ? `<span style="color:var(--ink-mid);font-size:.8rem">لا توجد مقاسات</span>` : sizes.map(([key, q]) => {
                                 // فصل المقاس واللون من المفتاح "S - وردي" أو "S"
@@ -2275,8 +2241,11 @@ svg { max-width:100%; height:auto !important }
                                         ${vColor ? `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${colorHex};border:1px solid rgba(0,0,0,.15);flex-shrink:0"></span><span style="font-size:.78rem;color:var(--ink-mid)">${vColor}</span>` : ''}
                                         <span style="${q === 0 ? 'color:var(--ruby)' : 'color:var(--ink)'}">: <strong>${q}</strong> قطعة</span>
                                     </div>
-                                    <div style="font-size:.7rem;font-family:monospace;background:var(--paper);padding:4px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer" onclick="app.showBarcode('${vCode}','${w.name}','${dispSize}','${vColor}','${w.pageName||''}')" title="طباعة الباركود">
-                                        <i class="fas fa-barcode" style="color:var(--gold)"></i> ${vCode}
+                                    <div style="font-size:.7rem;font-family:monospace;background:var(--paper);padding:4px 6px;border-radius:4px;border:1px solid var(--border);display:flex;align-items:center;gap:5px">
+                                        <span style="cursor:pointer" onclick="app.showBarcode('${vCode}','${w.name}','${dispSize}','${vColor}','${w.pageName||''}','${id}')" title="طباعة الباركود">
+                                            <i class="fas fa-barcode" style="color:var(--gold)"></i> ${vCode}
+                                        </span>
+                                        <span style="cursor:pointer;color:var(--gold);opacity:.7;font-size:.65rem" onclick="app.inlineEditBarcode('${id}','${key}')" title="تعديل الباركود"><i class="fas fa-pencil-alt"></i></span>
                                     </div>
                                 </div>`;
                             }).join('')}
@@ -2418,7 +2387,54 @@ svg { max-width:100%; height:auto !important }
         this.toast('تم حذف المنتج', 'success');
     },
 
-    showBarcode(code, itemName, size, color, pageName) {
+    // ══════════════════════════════════════════
+    // INLINE EDIT — warehouse fields (no reload)
+    // ══════════════════════════════════════════
+
+    // تعديل باركود الـ variation أو الباركود الرئيسي للصنف
+    inlineEditBarcode(itemId, varKey) {
+        const item = this.warehouse[itemId]; if (!item) return;
+        const current = varKey
+            ? (item.variations?.[varKey]?.barcode || item.barcode || '')
+            : (item.barcode || '');
+        const val = prompt('تعديل الباركود:', current);
+        if (val === null) return;
+        const clean = val.trim().toUpperCase();
+        if (!clean) { this.toast('الباركود لا يمكن أن يكون فارغاً', 'error'); return; }
+        // فحص التكرار (تجاهل نفس الصنف)
+        const dup = Object.entries(this.warehouse).find(([id, w]) => {
+            if (id === itemId) return false;
+            if (w.barcode === clean) return true;
+            return Object.values(w.variations || {}).some(v => v.barcode === clean);
+        });
+        if (dup) { this.toast(`الباركود ${clean} مستخدم في صنف آخر`, 'error'); return; }
+        const path = varKey
+            ? `jawaher_warehouse/${itemId}/variations/${varKey}/barcode`
+            : `jawaher_warehouse/${itemId}/barcode`;
+        update(ref(db), { [path]: clean }).then(() => this.toast('تم تحديث الباركود ✓', 'success'));
+    },
+
+    // تعديل سعر البيع
+    inlineEditSellPrice(itemId) {
+        const item = this.warehouse[itemId]; if (!item) return;
+        const val = prompt('تعديل سعر البيع (JOD):', item.sellPrice || '');
+        if (val === null) return;
+        const price = parseFloat(val);
+        if (isNaN(price) || price < 0) { this.toast('سعر غير صالح', 'error'); return; }
+        update(ref(db, `jawaher_warehouse/${itemId}`), { sellPrice: price })
+            .then(() => this.toast('تم تحديث سعر البيع ✓', 'success'));
+    },
+
+    // تعديل الملاحظة
+    inlineEditNotes(itemId) {
+        const item = this.warehouse[itemId]; if (!item) return;
+        const val = prompt('ملاحظات الصنف:', item.notes || '');
+        if (val === null) return;
+        update(ref(db, `jawaher_warehouse/${itemId}`), { notes: val.trim() })
+            .then(() => this.toast('تم حفظ الملاحظة ✓', 'success'));
+    },
+
+    showBarcode(code, itemName, size, color, pageName, itemId) {
         // دعم الاستدعاء القديم (code, name)
         if (size === undefined) {
             const parts = (itemName || '').split(' - ');
@@ -2429,6 +2445,8 @@ svg { max-width:100%; height:auto !important }
         const colorDot  = colorHex
             ? `<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${colorHex};border:1px solid rgba(0,0,0,.15);vertical-align:middle;margin-left:4px"></span>`
             : '';
+        const sellPrice = itemId && this.warehouse[itemId]?.sellPrice
+            ? this.warehouse[itemId].sellPrice : '';
         const modal = document.createElement('div');
         modal.className = 'modal-j open';
         modal.innerHTML = `
@@ -2438,12 +2456,14 @@ svg { max-width:100%; height:auto !important }
             <div class="modal-title" style="font-size:1rem;margin-bottom:.5rem">${itemName}</div>
             ${size     ? `<div style="font-size:.82rem;color:var(--ink-mid);margin-bottom:2px">المقاس: <strong>${size}</strong></div>` : ''}
             ${color    ? `<div style="font-size:.82rem;color:var(--ink-mid);margin-bottom:2px">${colorDot}اللون: <strong>${color}</strong></div>` : ''}
+            ${sellPrice ? `<div style="font-size:.82rem;color:var(--emerald);margin-bottom:4px;font-weight:800"><i class="fas fa-tag"></i> سعر البيع: ${sellPrice} JOD</div>` : ''}
             ${pageName ? `<div style="font-size:.78rem;color:var(--gold);margin-bottom:.75rem"><i class="fas fa-file-alt" style="font-size:.7rem;margin-left:3px"></i>${pageName}</div>` : '<div style="margin-bottom:.75rem"></div>'}
             <div style="background:#fff;border-radius:8px;padding:.5rem;border:1px solid var(--border);margin-bottom:.75rem">
                 <svg id="barcodeModal"></svg>
                 <div style="font-size:.75rem;color:#777;font-family:monospace;margin-top:2px">${code}</div>
+                ${sellPrice ? `<div style="font-size:.85rem;font-weight:800;color:#1A6B4A;margin-top:4px">${sellPrice} JOD</div>` : ''}
             </div>
-            <button class="btn-j btn-gold w-100" onclick="app._printBarcode('${code}','${(itemName||'').replace(/'/g,"\\'")}','${(size||'').replace(/'/g,"\\'")}','${(color||'').replace(/'/g,"\\'")}','${(pageName||'').replace(/'/g,"\\'")}')">
+            <button class="btn-j btn-gold w-100" onclick="app._printBarcode('${code}','${(itemName||'').replace(/'/g,"\\'")}','${(size||'').replace(/'/g,"\\'")}','${(color||'').replace(/'/g,"\\'")}','${(pageName||'').replace(/'/g,"\\'")}','${sellPrice}')">
                 <i class="fas fa-print"></i> طباعة الباركود
             </button>
         </div>`;
@@ -2451,7 +2471,7 @@ svg { max-width:100%; height:auto !important }
         JsBarcode('#barcodeModal', code, { format:'CODE128', width:2, height:60, displayValue:true, font:'Almarai' });
     },
 
-    _printBarcode(code, itemName, size, color, pageName) {
+    _printBarcode(code, itemName, size, color, pageName, sellPrice) {
         const win = window.open('', '_blank', 'width=460,height=340');
         if (!win) { this.toast('فعّل النوافذ المنبثقة في المتصفح', 'error'); return; }
 
@@ -2465,6 +2485,7 @@ svg { max-width:100%; height:auto !important }
             size     ? `<tr><td class="lbl">المقاس</td><td class="val"><strong>${size}</strong></td></tr>` : '',
             color    ? `<tr><td class="lbl">اللون</td><td class="val">${colorSwatch}${color}</td></tr>`    : '',
             pageName ? `<tr><td class="lbl">الصفحة</td><td class="val" style="color:#9A5500">${pageName}</td></tr>` : '',
+            sellPrice ? `<tr><td class="lbl">السعر</td><td class="val" style="color:#1A6B4A;font-weight:800">${sellPrice} JOD</td></tr>` : '',
         ].filter(Boolean).join('');
 
         win.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head>
@@ -2472,21 +2493,22 @@ svg { max-width:100%; height:auto !important }
 <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"><\/script>
 <style>
-  @page { size:9cm 5cm; margin:0 }
+  @page { size:9cm 5.5cm; margin:0 }
   *,*::before,*::after { box-sizing:border-box; margin:0; padding:0 }
-  html,body { width:9cm; height:5cm; background:#fff; font-family:'Almarai',Arial,sans-serif }
+  html,body { width:9cm; height:5.5cm; background:#fff; font-family:'Almarai',Arial,sans-serif }
   @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact } }
   body { display:flex; align-items:center; justify-content:center }
-  .card { width:9cm; height:5cm; border:1.5px solid #1A3A8F; border-radius:4px; display:flex; flex-direction:column; padding:2.5mm; overflow:hidden }
-  .hdr  { background:#0F2260; color:#7AA0F0; font-size:7pt; font-weight:800; text-align:center; padding:2px 4px; border-radius:3px; margin-bottom:2mm; flex-shrink:0; letter-spacing:.3px }
+  .card { width:9cm; height:5.5cm; border:1.5px solid #1A3A8F; border-radius:4px; display:flex; flex-direction:column; padding:2.5mm; overflow:hidden }
+  .hdr  { background:#0F2260; color:#7AA0F0; font-size:8pt; font-weight:800; text-align:center; padding:3px 4px; border-radius:3px; margin-bottom:2mm; flex-shrink:0; letter-spacing:.3px }
   .body { display:flex; gap:2.5mm; flex:1; min-height:0; align-items:center }
   .info { flex:1; min-width:0 }
   .info table { width:100%; border-collapse:collapse }
-  .lbl  { font-size:6pt; color:#888; width:30%; white-space:nowrap; padding-bottom:2px }
-  .val  { font-size:6.5pt; color:#111; font-weight:700; padding-right:3px; padding-bottom:2px }
+  .lbl  { font-size:7pt; color:#555; width:30%; white-space:nowrap; padding-bottom:2px; font-weight:700 }
+  .val  { font-size:7.5pt; color:#111; font-weight:700; padding-right:3px; padding-bottom:2px }
   .bc   { flex-shrink:0; text-align:center }
-  .bc svg { width:95px !important; height:auto !important }
-  .code { font-size:5.5pt; color:#666; text-align:center; font-family:monospace; margin-top:1.5mm; flex-shrink:0; letter-spacing:.5px }
+  .bc svg { width:105px !important; height:auto !important }
+  .code { font-size:6pt; color:#444; text-align:center; font-family:monospace; margin-top:1.5mm; flex-shrink:0; letter-spacing:.5px; font-weight:700 }
+  ${sellPrice ? `.price-badge { background:#e6f4ed; border:1.5px solid #1A6B4A; border-radius:4px; padding:2px 8px; font-size:9pt; font-weight:800; color:#1A6B4A; text-align:center; margin-top:2mm; flex-shrink:0 }` : ''}
 </style>
 </head><body>
 <div class="card">
@@ -2496,12 +2518,13 @@ svg { max-width:100%; height:auto !important }
     <div class="bc"><svg id="bc"></svg></div>
   </div>
   <div class="code">${code}</div>
+  ${sellPrice ? `<div class="price-badge">💰 ${sellPrice} JOD</div>` : ''}
 </div>
 <script>
 (function(){
   function run(){
     try{
-      JsBarcode('#bc','${code}',{format:'CODE128',width:1.5,height:44,displayValue:false,margin:2,background:'transparent'});
+      JsBarcode('#bc','${code}',{format:'CODE128',width:1.6,height:46,displayValue:false,margin:2,background:'transparent'});
     }catch(e){}
     setTimeout(function(){ window.print(); window.close(); }, 700);
   }
@@ -4026,14 +4049,48 @@ updateRetSizes(itemIdx) {
 
     _wizStepPricing(body) {
         const hasAutoPage = !!this._wiz.pageName;
+        const items = this._wiz.collectedItems || [];
+        const firstW = items.length ? this.warehouse[items[0].itemId] : null;
+        const autoSell = firstW?.sellPrice ? parseFloat(firstW.sellPrice) : null;
+        const savedDelivery = this._wiz.deliveryFee !== undefined ? this._wiz.deliveryFee : 3;
+        const savedTotal    = this._wiz.price || (autoSell !== null ? (autoSell + savedDelivery).toFixed(2) : '');
+
         body.innerHTML = this._wizLabel('السعر والمصدر') + `
+            <!-- breakdown: سعر القطعة + توصيل قابل للتعديل -->
+            <div style="background:rgba(26,107,74,.06);border:1px solid rgba(26,107,74,.2);border-radius:10px;padding:10px 12px;margin-bottom:1rem">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:80px">
+                        <span style="font-size:.7rem;color:var(--ink-mid);margin-bottom:2px"><i class="fas fa-tag" style="color:var(--emerald)"></i> سعر القطعة</span>
+                        <strong style="font-size:1rem;color:var(--emerald)">${autoSell !== null ? autoSell + ' JOD' : '—'}</strong>
+                    </div>
+                    <span style="font-size:1.2rem;color:var(--ink-mid);font-weight:300">+</span>
+                    <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:90px">
+                        <span style="font-size:.7rem;color:var(--ink-mid);margin-bottom:2px"><i class="fas fa-truck" style="color:var(--gold)"></i> توصيل</span>
+                        <div style="display:flex;align-items:center;gap:4px">
+                            <input type="number" id="wiz_delivery" min="0" step="0.5"
+                                style="width:70px;text-align:center;font-size:.95rem;font-weight:800;padding:3px 6px;border:1.5px solid var(--gold);border-radius:8px;background:var(--paper-warm);color:var(--ink)"
+                                value="${savedDelivery}"
+                                oninput="app._wizCalcTotal()">
+                            <span style="font-size:.75rem;color:var(--ink-mid)">JOD</span>
+                        </div>
+                    </div>
+                    <span style="font-size:1.2rem;color:var(--ink-mid);font-weight:300">=</span>
+                    <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:80px">
+                        <span style="font-size:.7rem;color:var(--ink-mid);margin-bottom:2px">الإجمالي</span>
+                        <strong id="wiz_total_display" style="font-size:1.1rem;color:var(--emerald)">— JOD</strong>
+                    </div>
+                </div>
+            </div>
+            <!-- السعر الإجمالي النهائي قابل للتعديل اليدوي -->
+            <div style="font-size:.78rem;color:var(--ink-mid);font-weight:600;margin-bottom:.4rem">السعر الإجمالي للزبون</div>
             <div style="display:flex;gap:.75rem;align-items:center;margin-bottom:1.25rem">
                 <span style="background:var(--paper-warm);border:1.5px solid var(--border);border-radius:10px;padding:.75rem 1rem;font-size:1rem;font-weight:700;color:var(--ink-mid)">JOD</span>
                 <input type="number" id="wiz_price" class="form-control-j" style="font-size:1.3rem;font-weight:800;flex:1;padding:.75rem 1rem"
-                    placeholder="0.00" step="0.5" value="${this._wiz.price}"
+                    placeholder="0.00" step="0.5" value="${savedTotal}"
+                    oninput="app._wiz.price = parseFloat(this.value) || ''"
                     onkeydown="if(event.key==='Enter')app._wizNext()">
             </div>
-            <!-- اسم الصفحة — عرض فقط، مربوط بالصنف -->
+            <!-- اسم الصفحة -->
             <div style="margin-bottom:.75rem">
                 <div style="font-size:.78rem;color:var(--ink-mid);font-weight:600;margin-bottom:.3rem">اسم الصفحة</div>
                 <div style="display:flex;align-items:center;gap:.6rem;background:var(--paper-warm);border:1.5px solid var(--border);border-radius:10px;padding:.65rem 1rem;min-height:46px">
@@ -4049,6 +4106,30 @@ updateRetSizes(itemIdx) {
             </div>
             <input type="text" id="wiz_tags" class="form-control-j" style="font-size:.95rem;padding:.7rem 1rem"
                 placeholder="ملاحظات / Tags (اختياري)..." value="${this._wiz.tags}">`;
+
+        // حساب الإجمالي عند التحميل
+        setTimeout(() => this._wizCalcTotal(), 0);
+    },
+
+    _wizCalcTotal() {
+        const items = this._wiz.collectedItems || [];
+        const firstW = items.length ? this.warehouse[items[0].itemId] : null;
+        const sellPrice = firstW?.sellPrice ? parseFloat(firstW.sellPrice) : null;
+        const delivery  = parseFloat(document.getElementById('wiz_delivery')?.value) || 0;
+        this._wiz.deliveryFee = delivery;
+        const totalDisp = document.getElementById('wiz_total_display');
+        const priceInp  = document.getElementById('wiz_price');
+        if (sellPrice !== null) {
+            const total = sellPrice + delivery;
+            if (totalDisp) totalDisp.textContent = total.toFixed(2) + ' JOD';
+            // فقط نحدث السعر إذا المستخدم لم يعدّله يدوياً
+            if (priceInp && (priceInp.value === '' || parseFloat(priceInp.value) === this._wiz._lastAutoPrice)) {
+                priceInp.value = total.toFixed(2);
+                this._wiz._lastAutoPrice = total;
+            }
+        } else {
+            if (totalDisp) totalDisp.textContent = '— JOD';
+        }
     },
 
     _wizStepConfirm(body) {
@@ -4122,15 +4203,24 @@ updateRetSizes(itemIdx) {
             }
             if (items.length === 0) { this._wizErr('أضف منتجاً واحداً على الأقل'); return; }
             this._wiz.collectedItems = items;
+            // سعر تلقائي: sellPrice أول صنف + 3 دينار توصيل
+            if (!this._wiz.price || this._wiz.price === '') {
+                const firstW = this.warehouse[items[0].itemId];
+                if (firstW?.sellPrice) {
+                    this._wiz.price = parseFloat(firstW.sellPrice) + 3;
+                }
+            }
         } else if (s === 5) {
-            const price = parseFloat(document.getElementById('wiz_price')?.value);
-            const page  = document.getElementById('wiz_page')?.value || this._wiz.pageName;
-            const tags  = document.getElementById('wiz_tags')?.value.trim() || '';
+            const price    = parseFloat(document.getElementById('wiz_price')?.value);
+            const page     = document.getElementById('wiz_page')?.value || this._wiz.pageName;
+            const tags     = document.getElementById('wiz_tags')?.value.trim() || '';
+            const delivery = parseFloat(document.getElementById('wiz_delivery')?.value) || 0;
             if (!price || price <= 0) { this._wizErr('يرجى إدخال السعر'); return; }
             if (!page) { this._wizErr('لم يتم تحديد الصفحة — يرجى اختيار صنف مرتبط بصفحة'); return; }
-            this._wiz.price = price;
-            this._wiz.pageName = page;
-            this._wiz.tags = tags;
+            this._wiz.price       = price;
+            this._wiz.pageName    = page;
+            this._wiz.tags        = tags;
+            this._wiz.deliveryFee = delivery;
         }
         this._wiz.step++;
         this._wizRender();
