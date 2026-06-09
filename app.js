@@ -4050,38 +4050,65 @@ updateRetSizes(itemIdx) {
     _wizStepPricing(body) {
         const hasAutoPage = !!this._wiz.pageName;
         const items = this._wiz.collectedItems || [];
-        const firstW = items.length ? this.warehouse[items[0].itemId] : null;
-        const autoSell = firstW?.sellPrice ? parseFloat(firstW.sellPrice) : null;
         const savedDelivery = this._wiz.deliveryFee !== undefined ? this._wiz.deliveryFee : 3;
-        const savedTotal    = this._wiz.price || (autoSell !== null ? (autoSell + savedDelivery).toFixed(2) : '');
+
+        // حساب مجموع أسعار كل الأصناف (كل صنف × كميته)
+        const itemsBreakdown = items.map(it => {
+            const w = this.warehouse[it.itemId];
+            const sp = w?.sellPrice ? parseFloat(w.sellPrice) : null;
+            return { name: it.itemName, qty: it.qty || 1, sellPrice: sp, itemId: it.itemId };
+        });
+        const totalItemsPrice = itemsBreakdown.every(i => i.sellPrice !== null)
+            ? itemsBreakdown.reduce((sum, i) => sum + i.sellPrice * i.qty, 0)
+            : null;
+        const savedTotal = this._wiz.price || (totalItemsPrice !== null ? (totalItemsPrice + savedDelivery).toFixed(2) : '');
+
+        // صفوف الأصناف مع سعر قابل للتعديل لكل صنف
+        const itemRows = itemsBreakdown.map((it, idx) => `
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border)">
+                <div style="flex:1;font-size:.82rem;font-weight:700;color:var(--ink)">${it.name}
+                    ${it.qty > 1 ? `<span style="font-size:.72rem;color:var(--ink-mid);margin-right:3px">×${it.qty}</span>` : ''}
+                </div>
+                <input type="number" id="wiz_item_price_${idx}" min="0" step="0.5"
+                    style="width:80px;text-align:center;font-size:.88rem;font-weight:800;padding:3px 6px;border:1.5px solid var(--emerald);border-radius:8px;background:rgba(26,107,74,.06);color:var(--emerald)"
+                    value="${it.sellPrice !== null ? it.sellPrice : ''}"
+                    placeholder="السعر"
+                    oninput="app._wizCalcTotal()">
+                <span style="font-size:.72rem;color:var(--ink-mid)">JOD</span>
+            </div>`).join('');
 
         body.innerHTML = this._wizLabel('السعر والمصدر') + `
-            <!-- breakdown: سعر القطعة + توصيل قابل للتعديل -->
-            <div style="background:rgba(26,107,74,.06);border:1px solid rgba(26,107,74,.2);border-radius:10px;padding:10px 12px;margin-bottom:1rem">
+            <!-- أسعار الأصناف -->
+            <div style="background:rgba(26,107,74,.04);border:1px solid rgba(26,107,74,.18);border-radius:10px;padding:8px 12px;margin-bottom:.75rem">
+                <div style="font-size:.72rem;color:var(--ink-mid);font-weight:700;margin-bottom:4px"><i class="fas fa-tag" style="color:var(--emerald)"></i> سعر القطعة لكل صنف</div>
+                ${itemRows}
+            </div>
+            <!-- breakdown: مجموع الأصناف + توصيل -->
+            <div style="background:rgba(26,107,74,.06);border:1px solid rgba(26,107,74,.2);border-radius:10px;padding:10px 12px;margin-bottom:.75rem">
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                    <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:80px">
-                        <span style="font-size:.7rem;color:var(--ink-mid);margin-bottom:2px"><i class="fas fa-tag" style="color:var(--emerald)"></i> سعر القطعة</span>
-                        <strong style="font-size:1rem;color:var(--emerald)">${autoSell !== null ? autoSell + ' JOD' : '—'}</strong>
+                    <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:70px">
+                        <span style="font-size:.68rem;color:var(--ink-mid);margin-bottom:2px">مجموع الأصناف</span>
+                        <strong id="wiz_items_sum" style="font-size:.95rem;color:var(--emerald)">— JOD</strong>
                     </div>
-                    <span style="font-size:1.2rem;color:var(--ink-mid);font-weight:300">+</span>
+                    <span style="font-size:1.1rem;color:var(--ink-mid);font-weight:300">+</span>
                     <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:90px">
-                        <span style="font-size:.7rem;color:var(--ink-mid);margin-bottom:2px"><i class="fas fa-truck" style="color:var(--gold)"></i> توصيل</span>
+                        <span style="font-size:.68rem;color:var(--ink-mid);margin-bottom:2px"><i class="fas fa-truck" style="color:var(--gold)"></i> توصيل (مرة واحدة)</span>
                         <div style="display:flex;align-items:center;gap:4px">
                             <input type="number" id="wiz_delivery" min="0" step="0.5"
-                                style="width:70px;text-align:center;font-size:.95rem;font-weight:800;padding:3px 6px;border:1.5px solid var(--gold);border-radius:8px;background:var(--paper-warm);color:var(--ink)"
+                                style="width:68px;text-align:center;font-size:.95rem;font-weight:800;padding:3px 6px;border:1.5px solid var(--gold);border-radius:8px;background:var(--paper-warm);color:var(--ink)"
                                 value="${savedDelivery}"
                                 oninput="app._wizCalcTotal()">
-                            <span style="font-size:.75rem;color:var(--ink-mid)">JOD</span>
+                            <span style="font-size:.72rem;color:var(--ink-mid)">JOD</span>
                         </div>
                     </div>
-                    <span style="font-size:1.2rem;color:var(--ink-mid);font-weight:300">=</span>
-                    <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:80px">
-                        <span style="font-size:.7rem;color:var(--ink-mid);margin-bottom:2px">الإجمالي</span>
-                        <strong id="wiz_total_display" style="font-size:1.1rem;color:var(--emerald)">— JOD</strong>
+                    <span style="font-size:1.1rem;color:var(--ink-mid);font-weight:300">=</span>
+                    <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:70px">
+                        <span style="font-size:.68rem;color:var(--ink-mid);margin-bottom:2px">الإجمالي</span>
+                        <strong id="wiz_total_display" style="font-size:1rem;color:var(--emerald)">— JOD</strong>
                     </div>
                 </div>
             </div>
-            <!-- السعر الإجمالي النهائي قابل للتعديل اليدوي -->
+            <!-- السعر النهائي قابل للتعديل -->
             <div style="font-size:.78rem;color:var(--ink-mid);font-weight:600;margin-bottom:.4rem">السعر الإجمالي للزبون</div>
             <div style="display:flex;gap:.75rem;align-items:center;margin-bottom:1.25rem">
                 <span style="background:var(--paper-warm);border:1.5px solid var(--border);border-radius:10px;padding:.75rem 1rem;font-size:1rem;font-weight:700;color:var(--ink-mid)">JOD</span>
@@ -4107,28 +4134,46 @@ updateRetSizes(itemIdx) {
             <input type="text" id="wiz_tags" class="form-control-j" style="font-size:.95rem;padding:.7rem 1rem"
                 placeholder="ملاحظات / Tags (اختياري)..." value="${this._wiz.tags}">`;
 
-        // حساب الإجمالي عند التحميل
         setTimeout(() => this._wizCalcTotal(), 0);
     },
 
     _wizCalcTotal() {
         const items = this._wiz.collectedItems || [];
-        const firstW = items.length ? this.warehouse[items[0].itemId] : null;
-        const sellPrice = firstW?.sellPrice ? parseFloat(firstW.sellPrice) : null;
-        const delivery  = parseFloat(document.getElementById('wiz_delivery')?.value) || 0;
+        const delivery = parseFloat(document.getElementById('wiz_delivery')?.value) || 0;
         this._wiz.deliveryFee = delivery;
-        const totalDisp = document.getElementById('wiz_total_display');
-        const priceInp  = document.getElementById('wiz_price');
-        if (sellPrice !== null) {
-            const total = sellPrice + delivery;
-            if (totalDisp) totalDisp.textContent = total.toFixed(2) + ' JOD';
-            // فقط نحدث السعر إذا المستخدم لم يعدّله يدوياً
+
+        // مجموع كل الأصناف من الـ inputs (قابلة للتعديل)
+        let itemsSum = 0;
+        let allHavePrice = true;
+        items.forEach((it, idx) => {
+            const inp = document.getElementById(`wiz_item_price_${idx}`);
+            const val = parseFloat(inp?.value);
+            if (!isNaN(val) && val >= 0) {
+                itemsSum += val * (it.qty || 1);
+                // حفظ السعر المعدّل في الـ wiz
+                if (!this._wiz._itemPrices) this._wiz._itemPrices = {};
+                this._wiz._itemPrices[idx] = val;
+            } else {
+                allHavePrice = false;
+            }
+        });
+
+        const sumEl  = document.getElementById('wiz_items_sum');
+        const totalEl = document.getElementById('wiz_total_display');
+        const priceInp = document.getElementById('wiz_price');
+
+        if (allHavePrice) {
+            const total = itemsSum + delivery;
+            if (sumEl)   sumEl.textContent   = itemsSum.toFixed(2) + ' JOD';
+            if (totalEl) totalEl.textContent = total.toFixed(2) + ' JOD';
+            // نحدث السعر النهائي تلقائياً إلا لو المستخدم عدّله يدوياً
             if (priceInp && (priceInp.value === '' || parseFloat(priceInp.value) === this._wiz._lastAutoPrice)) {
                 priceInp.value = total.toFixed(2);
                 this._wiz._lastAutoPrice = total;
             }
         } else {
-            if (totalDisp) totalDisp.textContent = '— JOD';
+            if (sumEl)   sumEl.textContent   = '— JOD';
+            if (totalEl) totalEl.textContent = '— JOD';
         }
     },
 
@@ -4203,11 +4248,16 @@ updateRetSizes(itemIdx) {
             }
             if (items.length === 0) { this._wizErr('أضف منتجاً واحداً على الأقل'); return; }
             this._wiz.collectedItems = items;
-            // سعر تلقائي: sellPrice أول صنف + 3 دينار توصيل
+            // سعر تلقائي: مجموع sellPrice × qty لكل الأصناف + 3 دينار توصيل
             if (!this._wiz.price || this._wiz.price === '') {
-                const firstW = this.warehouse[items[0].itemId];
-                if (firstW?.sellPrice) {
-                    this._wiz.price = parseFloat(firstW.sellPrice) + 3;
+                const allHavePrice = items.every(it => this.warehouse[it.itemId]?.sellPrice);
+                if (allHavePrice) {
+                    const itemsTotal = items.reduce((sum, it) => {
+                        return sum + parseFloat(this.warehouse[it.itemId].sellPrice) * (it.qty || 1);
+                    }, 0);
+                    const delivery = this._wiz.deliveryFee !== undefined ? this._wiz.deliveryFee : 3;
+                    this._wiz.price = itemsTotal + delivery;
+                    this._wiz._lastAutoPrice = this._wiz.price;
                 }
             }
         } else if (s === 5) {
@@ -4646,9 +4696,39 @@ document.addEventListener('DOMContentLoaded', () => {
     app.initKeys();
     app.renderSavedAccounts();
 
-    // ── Register Service Worker (offline + cache) ─────────────
+    // ── Register Service Worker + Auto-Update System ─────────────
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
+        navigator.serviceWorker.register('./sw.js').then(reg => {
+
+            // عند تفعيل SW جديد → reload فوري
+            reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                newWorker?.addEventListener('statechange', () => {
+                    if (newWorker.state === 'activated') {
+                        // SW جديد نشط — نعطي وقت قصير ثم reload
+                        setTimeout(() => window.location.reload(true), 300);
+                    }
+                });
+            });
+
+            // استقبال رسائل من الـ SW
+            navigator.serviceWorker.addEventListener('message', e => {
+                if (e.data?.type === 'SW_UPDATED') {
+                    window.location.reload(true);
+                }
+            });
+
+            // تحقق من تحديثات كل دقيقتين (بدل 5)
+            const checkUpdate = () => reg.update().catch(() => {});
+            setTimeout(checkUpdate, 2000);
+            setInterval(checkUpdate, 2 * 60 * 1000);
+
+        }).catch(() => {});
+
+        // إذا تغيّر الـ controller (SW جديد أخذ زمام) → reload
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            window.location.reload(true);
+        });
     }
 
     document.getElementById('loginPass')?.addEventListener('keydown', e => { if (e.key === 'Enter') app.login(); });

@@ -1,45 +1,49 @@
 // ============================================================
-// sw.js — Jawaher Service Worker
+// sw.js — Shadi Malkawi Service Worker
+// Network-First | Auto-Update on every deploy
 // ============================================================
 
-const CACHE_NAME = 'malkawi-v160';
+const CACHE_NAME = 'shm-cache-v3';
 
 const SHELL = [
     './',
     './index.html',
     './app.js',
     './style.css',
+    './style-shm.css',
     './constants.js',
     './firebase-config.js',
-    'https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&display=swap',
-    'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap',
-    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css',
-    'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js',
 ];
 
-// ── Install ──────────────────────────────────────────────────
+// ── Install: skipWaiting فوري بدون انتظار ──────────────────
 self.addEventListener('install', e => {
+    self.skipWaiting();
     e.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => Promise.allSettled(SHELL.map(url => cache.add(url).catch(() => {}))))
-            .then(() => self.skipWaiting())
+        caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL)).catch(() => {})
     );
 });
 
-// ── Activate: مسح الكاش القديم ──────────────────────────────
+// ── Activate: مسح كل الكاش القديم + claim فوري ─────────────
 self.addEventListener('activate', e => {
     e.waitUntil(
         caches.keys()
-            .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+            .then(keys => Promise.all(
+                keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+            ))
             .then(() => self.clients.claim())
+            .then(() => {
+                // أبلغ كل التبويبات المفتوحة
+                self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
+                    .then(clients => clients.forEach(c => c.postMessage({ type: 'SW_UPDATED' })));
+            })
     );
 });
 
-// ── Fetch: Network-First (يتحقق من السيرفر دايماً) ──────────
+// ── Fetch: Network-First للملفات المحلية ────────────────────
 self.addEventListener('fetch', e => {
     const url = new URL(e.request.url);
 
-    // Firebase وGoogle APIs: شبكة فقط بدون تدخل
+    // Firebase وGoogle APIs: شبكة فقط بدون كاش
     if (
         url.hostname.includes('firebase') ||
         url.hostname.includes('googleapis.com') ||
@@ -47,7 +51,7 @@ self.addEventListener('fetch', e => {
         url.hostname.includes('wa.me')
     ) return;
 
-    // CDN assets (fonts, icons, xlsx): cache-first لأنها ما بتتغير
+    // CDN: cache-first (مكتبات خارجية ثابتة)
     if (
         url.hostname.includes('cdnjs.cloudflare.com') ||
         url.hostname.includes('cdn.jsdelivr.net') ||
@@ -60,10 +64,9 @@ self.addEventListener('fetch', e => {
         return;
     }
 
-    // ملفات الموقع (app.js, index.html, style.css...): Network-First
-    // → يجرب السيرفر أولاً → إذا نجح يحدّث الكاش → إذا فشل يرجع الكاش
+    // ملفات الموقع: Network-First دايماً — الشبكة تفوز
     e.respondWith(
-        fetch(e.request)
+        fetch(e.request, { cache: 'no-store' })
             .then(response => {
                 if (e.request.method === 'GET' && response.status === 200) {
                     const clone = response.clone();
