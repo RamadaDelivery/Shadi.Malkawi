@@ -249,7 +249,7 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
                             display:flex;align-items:center;justify-content:center;
                             font-weight:800;font-size:.85rem;color:#1A1A2E;
                         ">${a.u[0].toUpperCase()}</div>
-                        <span style="flex:1;color:rgba(255,255,255,.8);font-size:.88rem;">${a.u}</span>
+                        <span style="flex:1;color:#111;font-size:.88rem;">${a.u}</span>
                         <button onclick="event.stopPropagation();app._removeAccount('${a.u}')" style="
                             background:none;border:none;color:rgba(255,255,255,.3);
                             cursor:pointer;font-size:.8rem;padding:.2rem .4rem;
