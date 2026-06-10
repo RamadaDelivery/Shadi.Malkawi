@@ -210,23 +210,20 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
         localStorage.setItem('shmSavedAccounts', JSON.stringify(accounts));
         this.renderSavedAccounts();
     },
- toggleRememberMe() {
-    const cb   = document.getElementById('rememberMe');
-    const box  = document.getElementById('rememberMeBox');
-    const icon = box.querySelector('i');
-    
-    if (cb.checked) {
-        box.style.background = 'rgba(201,168,76,.2)';
-        box.style.borderColor = '#C9A84C';
-        box.style.color = '#000000'; // تلوين النص بالأسود عند التفعيل
-        icon.style.display = 'block';
-    } else {
-        box.style.background = 'rgba(255,255,255,.05)';
-        box.style.borderColor = 'rgba(201,168,76,.4)';
-        box.style.color = '#000000'; // تلوين النص بالأسود أيضاً عند إلغاء التفعيل
-        icon.style.display = 'none';
-    }
-},
+    toggleRememberMe() {
+        const cb  = document.getElementById('rememberMe');
+        const box = document.getElementById('rememberMeBox');
+        const icon = box.querySelector('i');
+        if (cb.checked) {
+            box.style.background = 'rgba(201,168,76,.2)';
+            box.style.borderColor = '#C9A84C';
+            icon.style.display = 'block';
+        } else {
+            box.style.background = 'rgba(255,255,255,.05)';
+            box.style.borderColor = 'rgba(201,168,76,.4)';
+            icon.style.display = 'none';
+        }
+    },
     renderSavedAccounts() {
         const accounts = this._getSavedAccounts();
         const container = document.getElementById('savedAccountsList');
@@ -2196,36 +2193,35 @@ ${labelsHtml}
             const colorBorder = mainColorHex || 'var(--gold)';
             
             return `<div class="col-12 col-sm-6 col-lg-4 col-xl-3">
-      <div class="item-card" style="border-top:4px solid ${colorBorder}">
-                    <div class="item-card-header" style="margin-bottom: 12px;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-                            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex:1">
-                                <div class="item-card-name" style="font-weight:700;font-size:1.05rem">${w.name}</div>
-                                
-                                <div style="background:rgba(26,107,74,.08);border:1px solid rgba(26,107,74,.25);border-radius:8px;padding:4px 10px;font-size:.74rem;display:flex;align-items:center;gap:5px">
-                                    <span style="color:var(--emerald)">سعر البيع</span>
-                                    <strong style="color:var(--emerald)">${w.sellPrice ? w.sellPrice + ' JOD' : '—'}</strong>
-                                    <span style="cursor:pointer;color:var(--gold);font-size:.72rem;margin-right:2px" onclick="app.inlineEditSellPrice('${id}')" title="تعديل سعر البيع"><i class="fas fa-pencil-alt"></i></span>
-                                </div>
+                <div class="item-card" style="border-top:4px solid ${colorBorder}">
+                    <div class="item-card-header">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                            <div>
+                                <div class="item-card-name">${w.name}</div>
+                                <div class="item-card-code" style="opacity:.7;font-size:.7rem">المعرف: ${id.slice(-8).toUpperCase()}</div>
                             </div>
-                            
-                            ${total <= 3 ? `<span style="background:rgba(192,37,86,.25);color:#ffaaaa;font-size:.7rem;font-weight:800;padding:2px 8px;border-radius:20px;white-space:nowrap">⚠ منخفض</span>` : ''}
+                            ${total <= 3 ? `<span style="background:rgba(192,37,86,.25);color:#ffaaaa;font-size:.7rem;font-weight:800;padding:2px 8px;border-radius:20px">⚠ منخفض</span>` : ''}
                         </div>
+                        ${w.pageName ? `<div style="font-size:.72rem;color:rgba(255,255,255,.5);margin-top:4px"><i class="fas fa-file-alt me-1"></i>${w.pageName}</div>` : ''}
                     </div>
-                    
                     <div class="item-card-body">
                         <div class="item-qty-row">
                             <span class="item-qty-label">إجمالي المخزون</span>
                             <span class="item-qty-value">${total} <small style="font-size:.8rem;font-weight:400;color:var(--ink-mid)">قطعة</small></span>
                         </div>
                         <div class="item-qty-bar"><div class="item-qty-fill ${fillCls}" style="width:${Math.min(total > 0 ? Math.round(total / Math.max(total, 20) * 100) : 0, 100)}%"></div></div>
-                        
+                        <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.5rem">
+                            <div style="background:rgba(26,107,74,.08);border:1px solid rgba(26,107,74,.25);border-radius:8px;padding:4px 10px;font-size:.74rem;display:flex;align-items:center;gap:5px">
+                                <span style="color:var(--emerald)">سعر البيع</span>
+                                <strong style="color:var(--emerald)">${w.sellPrice ? w.sellPrice + ' JOD' : '—'}</strong>
+                                <span style="cursor:pointer;color:var(--gold);font-size:.72rem;margin-right:2px" onclick="app.inlineEditSellPrice('${id}')" title="تعديل سعر البيع"><i class="fas fa-pencil-alt"></i></span>
+                            </div>
+                        </div>
                         <div style="background:rgba(201,168,76,.06);border-right:3px solid var(--gold);border-radius:0 8px 8px 0;padding:5px 10px;font-size:.76rem;color:var(--ink-mid);margin-bottom:.5rem;display:flex;align-items:center;gap:6px">
                             <i class="fas fa-sticky-note" style="color:var(--gold)"></i>
                             <span style="flex:1">${w.notes || '<span style="opacity:.45">لا توجد ملاحظة</span>'}</span>
                             <span style="cursor:pointer;color:var(--gold);font-size:.72rem" onclick="app.inlineEditNotes('${id}')" title="تعديل الملاحظة"><i class="fas fa-pencil-alt"></i></span>
                         </div>
-                        
                         <div class="item-sizes mb-3">
                             ${sizes.length === 0 ? `<span style="color:var(--ink-mid);font-size:.8rem">لا توجد مقاسات</span>` : sizes.map(([key, q]) => {
                                 // فصل المقاس واللون من المفتاح "S - وردي" أو "S"
@@ -2254,7 +2250,6 @@ ${labelsHtml}
                                 </div>`;
                             }).join('')}
                         </div>
-                        
                         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
                             <button class="btn-j btn-gold btn-xs-j" style="flex:1" onclick="app.openAddStockModal('${id}')"><i class="fas fa-plus"></i> إضافة كمية</button>
                             <button class="btn-j btn-emerald btn-xs-j" style="flex:1" onclick="app.openInventoryCorrection('${id}')" title="تصحيح جرد"><i class="fas fa-clipboard-check"></i> جرد</button>
@@ -2262,7 +2257,10 @@ ${labelsHtml}
                             <button class="btn-j btn-ruby btn-xs-j" onclick="app.deleteItem('${id}')" title="حذف"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>
-                </div>;
+                </div>
+            </div>`;
+        }).join('');
+    },
 
     openAddStockModal(itemId) {
         const item = this.warehouse[itemId]; if (!item) return;
@@ -4055,9 +4053,12 @@ updateRetSizes(itemIdx) {
         const savedDelivery = this._wiz.deliveryFee !== undefined ? this._wiz.deliveryFee : 3;
 
         // حساب مجموع أسعار كل الأصناف (كل صنف × كميته)
-        const itemsBreakdown = items.map(it => {
+        // أولوية: السعر المحفوظ من تعديل المستخدم → ثم sellPrice من المستودع
+        const itemsBreakdown = items.map((it, idx) => {
+            const savedPrice = this._wiz._itemPrices?.[idx];
             const w = this.warehouse[it.itemId];
-            const sp = w?.sellPrice ? parseFloat(w.sellPrice) : null;
+            const sp = savedPrice !== undefined ? savedPrice
+                      : (w?.sellPrice ? parseFloat(w.sellPrice) : null);
             return { name: it.itemName, qty: it.qty || 1, sellPrice: sp, itemId: it.itemId };
         });
         const totalItemsPrice = itemsBreakdown.every(i => i.sellPrice !== null)
