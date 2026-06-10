@@ -210,20 +210,23 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
         localStorage.setItem('shmSavedAccounts', JSON.stringify(accounts));
         this.renderSavedAccounts();
     },
-    toggleRememberMe() {
-        const cb  = document.getElementById('rememberMe');
-        const box = document.getElementById('rememberMeBox');
-        const icon = box.querySelector('i');
-        if (cb.checked) {
-            box.style.background = 'rgba(201,168,76,.2)';
-            box.style.borderColor = '#C9A84C';
-            icon.style.display = 'block';
-        } else {
-            box.style.background = 'rgba(255,255,255,.05)';
-            box.style.borderColor = 'rgba(201,168,76,.4)';
-            icon.style.display = 'none';
-        }
-    },
+ toggleRememberMe() {
+    const cb   = document.getElementById('rememberMe');
+    const box  = document.getElementById('rememberMeBox');
+    const icon = box.querySelector('i');
+    
+    if (cb.checked) {
+        box.style.background = 'rgba(201,168,76,.2)';
+        box.style.borderColor = '#C9A84C';
+        box.style.color = '#000000'; // تلوين النص بالأسود عند التفعيل
+        icon.style.display = 'block';
+    } else {
+        box.style.background = 'rgba(255,255,255,.05)';
+        box.style.borderColor = 'rgba(201,168,76,.4)';
+        box.style.color = '#000000'; // تلوين النص بالأسود أيضاً عند إلغاء التفعيل
+        icon.style.display = 'none';
+    }
+},
     renderSavedAccounts() {
         const accounts = this._getSavedAccounts();
         const container = document.getElementById('savedAccountsList');
