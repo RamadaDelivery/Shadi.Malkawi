@@ -1232,6 +1232,8 @@ addItemRow() {
 
         const newRef = await push(ordersRef, payload);
         this.lastOrderId = newRef.key;
+        // خصم المخزون فوراً عند إنشاء الطلب
+        await this.deductStockDirect(newRef.key, payload);
         this.log('create', newRef.key, `إنشاء طلب للزبون: ${custName} | صفحة: ${pageName}`);
         this.toast('تم حفظ الطلب بنجاح ✓', 'success');
         this.resetOrderForm();
@@ -1440,9 +1442,7 @@ addItemRow() {
         const upd = {};
         this.selectedKb.forEach(id => { upd[`jawaher_orders/${id}/status`] = s; });
         await update(ref(db), upd);
-        // خصم أو إرجاع المخزون بعد التحديث
         for (const id of this.selectedKb) {
-            if (s === 'delivered') await this.deductStock(id);
             if (s === 'canceled' || s === 'postponed') await this._returnStock(id);
         }
         this.selectedKb.clear(); this.updateKbBulkPanel();
@@ -1519,7 +1519,79 @@ addItemRow() {
         document.getElementById('modalUpdateBtn').style.display = isRO ? 'none' : '';
         document.getElementById('modalDeleteBtn').onclick = () => this.deleteOrder(id);
         document.getElementById('modalPrintBtn').onclick = () => { this.printOrder(o, id); this.closeModal('orderModal'); };
+        // زر إضافة صنف — للمدير فقط
+        let addItemBtn = document.getElementById('modalAddItemBtn');
+        if (!addItemBtn) {
+            addItemBtn = document.createElement('button');
+            addItemBtn.id = 'modalAddItemBtn';
+            addItemBtn.className = 'btn-j btn-sapphire btn-sm-j';
+            addItemBtn.innerHTML = '<i class="fas fa-plus"></i> إضافة صنف';
+            document.querySelector('#orderModal .d-flex.gap-2').prepend(addItemBtn);
+        }
+        addItemBtn.style.display = this.role === 'Admin' ? '' : 'none';
+        addItemBtn.onclick = () => this.openAddItemToOrder(id);
         this.openModal('orderModal');
+    },
+
+    openAddItemToOrder(orderId) {
+        document.getElementById('addItemToOrderModal')?.remove();
+        const modal = document.createElement('div');
+        modal.id = 'addItemToOrderModal'; modal.className = 'modal-j open';
+        modal.innerHTML = `
+        <div class="modal-overlay" onclick="document.getElementById('addItemToOrderModal').remove()"></div>
+        <div class="modal-sheet" style="max-width:480px">
+            <div class="modal-handle"></div>
+            <div class="modal-title"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> إضافة صنف للطلب</div>
+            <div id="addItemRows"><div id="eItemsList" style="display:block"></div></div>
+            <button class="add-item-row-btn mt-2" onclick="app.addItemRow()"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> صنف آخر</button>
+            <div class="d-flex gap-3 mt-4">
+                <button class="btn-j btn-gold flex-fill" onclick="app._confirmAddItemsToOrder('${orderId}')">
+                    <i class="fas fa-save"></i> حفظ وإضافة للطلب
+                </button>
+                <button class="btn-j btn-ghost" onclick="document.getElementById('addItemToOrderModal').remove()">إلغاء</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        this.itemRows = [{ id: Date.now() }];
+        this.renderItemRows();
+    },
+
+    async _confirmAddItemsToOrder(orderId) {
+        const o = this.orders[orderId]; if (!o) return;
+        const newItems = [];
+        const rows = document.querySelectorAll('.ir-item');
+        for (let i = 0; i < rows.length; i++) {
+            const itemName = rows[i].value;
+            const found = Object.entries(this.warehouse).find(([,w]) => w.name === itemName);
+            if (!found) { this.toast(`يرجى اختيار منتج للصف ${i+1}`, 'error'); return; }
+            const sizeCombo = document.querySelector(`.ir-size[data-idx="${i}"]`)?.value;
+            const color = document.getElementById(`ir_color_${i}`)?.value || '';
+            const qty = parseInt(document.querySelector(`.ir-qty[data-idx="${i}"]`)?.value) || 1;
+            if (!sizeCombo || !color) { this.toast(`يرجى تحديد اللون والمقاس للصف ${i+1}`, 'error'); return; }
+            const avail = found[1].sizes?.[sizeCombo] || 0;
+            if (qty > avail) { this.toast(`الكمية (${qty}) غير متوفرة لـ ${found[1].name}. المتوفر: ${avail}`, 'error'); return; }
+            let finalSize = sizeCombo, finalColor = color;
+            if (sizeCombo.includes(' - ')) { finalSize = sizeCombo.split(' - ')[0]; finalColor = sizeCombo.split(' - ')[1]; }
+            newItems.push({ itemId: found[0], itemName: found[1].name, itemColor: finalColor, size: finalSize, exactKey: sizeCombo, qty });
+        }
+        if (!newItems.length) return;
+        const existingItems = o.items || [{ itemId: o.itemId, itemName: o.itemName, itemColor: o.itemColor, size: o.size, exactKey: o.exactKey, qty: o.qty }];
+        const mergedItems = [...existingItems, ...newItems];
+        const updates = {};
+        updates[`jawaher_orders/${orderId}/items`] = mergedItems;
+        updates[`jawaher_orders/${orderId}/qty`] = mergedItems.reduce((s,it)=>s+(it.qty||1),0);
+        // خصم من المستودع فوراً
+        for (const it of newItems) {
+            const wItem = this.warehouse[it.itemId]; if (!wItem) continue;
+            let key = it.exactKey || it.size;
+            const current = wItem.sizes?.[key] || 0;
+            updates[`jawaher_warehouse/${it.itemId}/sizes/${key}`] = Math.max(0, current - it.qty);
+        }
+        await update(ref(db), updates);
+        this.log('edit', orderId, `إضافة ${newItems.length} صنف للطلب`);
+        this.toast('تم إضافة الأصناف للطلب ✓', 'success');
+        document.getElementById('addItemToOrderModal')?.remove();
+        this.openOrderModal(orderId);
     },
 
 async updateOrder() {
@@ -1600,7 +1672,6 @@ async updateOrder() {
         async moveOrder(id, status) {
         const before = { status: this.orders[id]?.status };
         await update(ref(db, `jawaher_orders/${id}`), { status });
-        if (status === 'delivered') await this.deductStock(id);
         if (status === 'canceled' || status === 'postponed') await this._returnStock(id);
         this.log('status', id, `تغيير الحالة إلى ${STATUS_AR[status]}`);
         this._auditLog('order_edit', id, before, { status }, `تغيير حالة الطلب: ${STATUS_AR[before.status]} ← ${STATUS_AR[status]}`);
@@ -1631,6 +1702,28 @@ async updateOrder() {
         this._auditLog('order_delete', id, o, null, `حذف طلب ${o?.custName || ''} | السعر: ${o?.price || 0} JOD`);
         this.toast('تم الحذف' + (o?.stockDeducted ? ' وإرجاع الكمية للمستودع' : ''), 'success');
         this.closeModal('orderModal');
+    },
+
+    // ── خصم مباشر عند إنشاء الطلب (payload لم يُحفظ في this.orders بعد) ──
+    async deductStockDirect(orderId, payload) {
+        if (!payload) return;
+        const itemsToDeduct = payload.items || [{ itemId: payload.itemId, size: payload.exactKey || payload.size, exactKey: payload.exactKey, itemColor: payload.itemColor, qty: payload.qty }];
+        const updates = {};
+        for (const it of itemsToDeduct) {
+            if (!it.itemId) continue;
+            const item = this.warehouse[it.itemId]; if (!item) continue;
+            let keyToDeduct = it.exactKey || it.size;
+            if (item.sizes && item.sizes[keyToDeduct] === undefined && it.itemColor) {
+                if (item.sizes[`${it.size} - ${it.itemColor}`] !== undefined) keyToDeduct = `${it.size} - ${it.itemColor}`;
+            }
+            const current = item.sizes?.[keyToDeduct] || 0;
+            const qty = parseInt(it.qty) || 1;
+            updates[`jawaher_warehouse/${it.itemId}/sizes/${keyToDeduct}`] = Math.max(0, current - qty);
+        }
+        if (Object.keys(updates).length > 0) {
+            updates[`jawaher_orders/${orderId}/stockDeducted`] = true;
+            await update(ref(db), updates);
+        }
     },
 
     // ============ STOCK DEDUCTION ============
@@ -1694,7 +1787,6 @@ async deductStock(orderId) {
         win.document.write(this._buildLabelHTML([{ id, o }]));
         win.document.close();
         update(ref(db, `jawaher_orders/${id}`), { status: 'done' });
-        this.deductStock(id);
     },
 
     executePrint(ids) {
@@ -1705,7 +1797,7 @@ async deductStock(orderId) {
         const updates = {};
         setTimeout(() => {
             labels.forEach(({ id }) => { updates[`jawaher_orders/${id}/status`] = 'done'; });
-            update(ref(db), updates).then(() => { labels.forEach(({ id }) => this.deductStock(id)); });
+            update(ref(db), updates);
         }, 1500);
         this.toast('تمت الطباعة وتحويل الحالة إلى جاهزة', 'success');
     },
@@ -1758,7 +1850,7 @@ async deductStock(orderId) {
 <div class="li">
     <div class="lh">
       <div class="lpn">◆ ${pageHeader} ◆</div>
-      <div class="lsh"><span style="direction: ltr; unicode-bidi: bidi-override;">333 01 65 077 📞</span><span>👤 ${o.entryUser || ''}</span></div>
+      <div class="lsh"><span style="direction: ltr; unicode-bidi: bidi-override;">077 65 01 333 📞</span><span>👤 ${o.entryUser || ''}</span></div>
     </div>
     <div class="lb">
       <div class="lc lcr">
@@ -1983,9 +2075,7 @@ ${labelsHtml}
         const upd = {};
         this.selectedR.forEach(id => { upd[`jawaher_orders/${id}/status`] = s; });
         await update(ref(db), upd);
-        // خصم أو إرجاع المخزون بعد التحديث
         for (const id of this.selectedR) {
-            if (s === 'delivered') await this.deductStock(id);
             if (s === 'canceled' || s === 'postponed') await this._returnStock(id);
         }
         this.selectedR.clear(); this.updateRBulkPanel(); this.renderTable();
@@ -2038,6 +2128,86 @@ ${labelsHtml}
             return;
         }
         this._renderItemCards(items);
+    },
+
+    // ── Bulk barcode queue ──
+    _bulkQueue: [],
+
+    bulkScanAdd() {
+        const inp = document.getElementById('bulkScanInput');
+        const code = inp?.value.trim().toUpperCase();
+        if (!code) return;
+        let foundItemId = null, foundVarKey = null;
+        for (const [id, w] of Object.entries(this.warehouse)) {
+            if (w.barcode && w.barcode.toUpperCase() === code) { foundItemId = id; break; }
+            if (w.variations) {
+                for (const [vk, v] of Object.entries(w.variations)) {
+                    if (v.barcode && v.barcode.toUpperCase() === code) { foundItemId = id; foundVarKey = vk; break; }
+                }
+            }
+            if (foundItemId) break;
+        }
+        if (!foundItemId) { this.toast(`الباركود ${code} غير موجود`, 'error'); if (inp) inp.value = ''; return; }
+        const w = this.warehouse[foundItemId];
+        const varKey = foundVarKey || Object.keys(w.variations || {})[0] || Object.keys(w.sizes || {})[0] || '';
+        const dispSize = varKey.includes(' - ') ? varKey.split(' - ')[0] : varKey;
+        const dispColor = varKey.includes(' - ') ? varKey.split(' - ').slice(1).join(' - ') : (w.color || '');
+        const existing = this._bulkQueue.find(q => q.itemId === foundItemId && q.varKey === varKey);
+        if (existing) { existing.qty++; } else {
+            this._bulkQueue.push({ barcode: code, itemId: foundItemId, itemName: w.name, varKey, size: dispSize, color: dispColor, qty: 1 });
+        }
+        this._renderBulkQueue();
+        if (inp) { inp.value = ''; inp.focus(); }
+        this.toast(`✓ ${w.name} (${dispSize}${dispColor ? ' - ' + dispColor : ''})`, 'success');
+    },
+
+    _renderBulkQueue() {
+        const el = document.getElementById('bulkQueueList');
+        const actEl = document.getElementById('bulkActions');
+        if (!el) return;
+        if (!this._bulkQueue.length) {
+            el.innerHTML = '<div style="color:var(--ink-mid);font-size:.82rem;text-align:center;padding:1rem">لا توجد أصناف — امسح الباركود أو أضف</div>';
+            if (actEl) actEl.style.display = 'none';
+            return;
+        }
+        if (actEl) actEl.style.display = 'flex';
+        const rows = this._bulkQueue.map((item, i) => `
+            <div style="display:flex;align-items:center;gap:.6rem;padding:.5rem 0;border-bottom:1px dashed var(--border)">
+                <div style="flex:1">
+                    <div style="font-weight:700;font-size:.88rem">${item.itemName}</div>
+                    <div style="font-size:.72rem;color:var(--ink-mid)">${item.size}${item.color ? ' - ' + item.color : ''}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px">
+                    <button class="qty-btn" style="width:24px;height:24px" onclick="app._bulkAdjQty(${i},-1)">−</button>
+                    <input type="number" value="${item.qty}" min="1" style="width:44px;text-align:center;border:1px solid var(--border);border-radius:6px;padding:2px;font-weight:700;background:var(--paper)" onchange="app._bulkSetQty(${i},this.value)">
+                    <button class="qty-btn" style="width:24px;height:24px" onclick="app._bulkAdjQty(${i},1)">+</button>
+                </div>
+                <button class="btn-j btn-ruby btn-xs-j" onclick="app._bulkRemove(${i})" style="padding:.2rem .4rem"><i class="fas fa-times"></i></button>
+            </div>`).join('');
+        const total = this._bulkQueue.reduce((s, q) => s + q.qty, 0);
+        el.innerHTML = rows + `<div style="text-align:left;font-size:.8rem;color:var(--ink-mid);padding:.4rem 0;font-weight:700">إجمالي القطع: <span style="color:var(--gold)">${total}</span></div>`;
+    },
+
+    _bulkAdjQty(i, d) { this._bulkQueue[i].qty = Math.max(1,(this._bulkQueue[i].qty||1)+d); this._renderBulkQueue(); },
+    _bulkSetQty(i, v) { this._bulkQueue[i].qty = Math.max(1,parseInt(v)||1); this._renderBulkQueue(); },
+    _bulkRemove(i) { this._bulkQueue.splice(i,1); this._renderBulkQueue(); },
+
+    async executeBulkTransfer(type) {
+        if (!this._bulkQueue.length) { this.toast('القائمة فارغة', 'error'); return; }
+        const total = this._bulkQueue.reduce((s,q)=>s+q.qty,0);
+        const label = type === 'in' ? 'إدخال' : 'صرف';
+        if (!confirm(`تأكيد ${label} ${total} قطعة؟`)) return;
+        const updates = {};
+        for (const item of this._bulkQueue) {
+            const w = this.warehouse[item.itemId]; if (!w) continue;
+            const current = w.sizes?.[item.varKey] || 0;
+            updates[`jawaher_warehouse/${item.itemId}/sizes/${item.varKey}`] = type === 'in' ? current + item.qty : Math.max(0, current - item.qty);
+        }
+        await update(ref(db), updates);
+        this.log('bulk_transfer', 'batch', `${label}: ${this._bulkQueue.map(q=>`${q.itemName}(${q.qty})`).join(', ')}`);
+        this.toast(`تم ${label} ${total} قطعة ✓`, 'success');
+        this._bulkQueue = [];
+        this._renderBulkQueue();
     },
 
     openNewItemModal() {
@@ -4323,6 +4493,8 @@ updateRetSizes(itemIdx) {
 
         const newRef = await push(ordersRef, payload);
         this.lastOrderId = newRef.key;
+        // خصم المخزون فوراً
+        await this.deductStockDirect(newRef.key, payload);
         this.log('create', newRef.key, `إنشاء طلب للزبون: ${w.custName} | صفحة: ${w.pageName}`);
         this._auditLog('order_create', newRef.key, null, payload, `طلب جديد للزبون ${w.custName}`);
 
@@ -4667,7 +4839,11 @@ updateRetSizes(itemIdx) {
             if (c) colorSet.add(c);
         });
         if (colorInp) colorInp.dataset.availableColors = JSON.stringify([...colorSet]);
+        // Load ALL sizes initially (no color filter)
         this._trLoadSizes(idx, null, null);
+        // Update color preview div
+        const prev = document.getElementById(`tr_color_preview_${idx}`);
+        if (prev) prev.innerHTML = `<i class="fas fa-palette" style="color:var(--gold);font-size:.85rem"></i><span style="font-size:.82rem;color:var(--ink-mid)">اختر اللون...</span>`;
     },
 
     _trLoadSizes(idx, preSize, filterColor) {
@@ -4678,7 +4854,7 @@ updateRetSizes(itemIdx) {
         if (!sizeSel || !row?.itemId) return;
         const item = this.warehouse[row.itemId];
         if (!item) return;
-        const colorF = filterColor || colorInp?.value || null;
+        const colorF = filterColor !== undefined ? filterColor : (colorInp?.value || null);
         sizeSel.innerHTML = '<option value="">المقاس</option>';
         Object.entries(item.sizes||{}).forEach(([key, q]) => {
             let dispSize = key, keyColor = '';
@@ -4686,7 +4862,7 @@ updateRetSizes(itemIdx) {
             else if (item.color) keyColor = item.color;
             if (colorF && keyColor !== colorF) return;
             if (q > 0 || preSize === key)
-                sizeSel.innerHTML += `<option value="${key}" data-qty="${q}" ${preSize===key?'selected':''}>${dispSize} (${q})</option>`;
+                sizeSel.innerHTML += `<option value="${key}" data-qty="${q}" ${preSize===key?'selected':''}>${dispSize}${keyColor ? ' ('+keyColor+')' : ''} — ${q} قطعة</option>`;
         });
         const showStock = () => {
             const opt = sizeSel.selectedOptions[0];
@@ -4768,8 +4944,8 @@ updateRetSizes(itemIdx) {
 
             if (!sizeCombo) { this.toast(`الصنف ${i+1}: يرجى اختيار المقاس`, 'error'); return; }
 
-            let finalSize = sizeCombo, finalColor = color;
-            if (sizeCombo.includes(' - ')) { finalSize = sizeCombo.split(' - ')[0]; finalColor = sizeCombo.split(' - ')[1]; }
+            let finalSize = sizeCombo, finalColor = colorInp?.value || '';
+            if (sizeCombo.includes(' - ')) { finalSize = sizeCombo.split(' - ')[0]; finalColor = sizeCombo.split(' - ').slice(1).join(' - '); }
 
             items.push({ itemId, itemName: wItem.name, itemColor: finalColor, size: finalSize, exactKey: sizeCombo, qty });
         }
