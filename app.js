@@ -1749,7 +1749,7 @@ async deductStock(orderId) {
             const itemSizes  = items.map(it => it.size      || '').filter(Boolean).join('، ') || '—';
 
             const html = `<div class="lp">
-`<div class="li">
+<div class="li">
     <div class="lh">
       <div class="lpn">◆ ${pageHeader} ◆</div>
       <div class="lsh"><span style="direction: ltr; unicode-bidi: bidi-override;">333 01 65 077 📞</span><span>👤 ${o.entryUser || ''}</span></div>
