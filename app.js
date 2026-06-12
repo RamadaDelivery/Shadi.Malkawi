@@ -1749,7 +1749,7 @@ async deductStock(orderId) {
             const itemSizes  = items.map(it => it.size      || '').filter(Boolean).join('، ') || '—';
 
             const html = `<div class="lp">
-  <div class="li">
+<div class="li">
     <div class="lh">
       <div class="lpn">◆ ${pageHeader} ◆</div>
       <div class="lsh"><span>📞 077 65 01 333</span><span>👤 ${o.entryUser || ''}</span></div>
@@ -1766,13 +1766,15 @@ async deductStock(orderId) {
       </div>
       <div class="lc lcl">
         <div class="lf"><div class="lfl">عنوان الزبون</div><div class="lfv laddr">${o.governorate ? o.governorate + ' - ' : ''}${o.custAddr || '—'}</div></div>
-        <div class="lf"><div class="lfl">رقم الهاتف</div><div class="lfv lphone" dir="ltr">${o.custMob || ''}</div></div>
+        {/* التعديل الأول: جعل اتجاه رقم الهاتف من اليمين إلى اليسار rtl */}
+        <div class="lf"><div class="lfl">رقم الهاتف</div><div class="lfv lphone" dir="rtl">${o.custMob || ''}</div></div>
         <div class="lf lprice-box"><div class="lfl" style="color:#1A6B4A">القيمة شامل</div><div class="lfv lprice">${o.price || 0} JOD</div></div>
         <div class="lf" style="flex:1;overflow:hidden"><div class="lfl">ملاحظات</div><div class="lfv lnotes">${o.tags || ''}</div></div>
         <div class="lwarn">⚠ يُمنع فتح الطرد</div>
       </div>
     </div>
-    <div class="lbc"><svg id="${bcId}"></svg>${sellPrice ? `<div class="lbc-price">${sellPrice} JOD</div>` : ''}</div>
+    {/* التعديل الثاني: حذف سعر القطعة الذي كان بجانب الباركود */}
+    <div class="lbc"><svg id="${bcId}"></svg></div>
   </div>
 </div>`;
             return { html, bcId, bcVal };
