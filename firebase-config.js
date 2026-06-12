@@ -30,6 +30,7 @@ export const defPagesRef      = ref(db, FIREBASE_PATHS.defPages);
 export const defUsersRef      = ref(db, FIREBASE_PATHS.defUsers);
 export const sysUsersRef      = ref(db, 'jawaher_system_users');
 export const customColorsRef  = ref(db, 'jawaher_custom_colors');
+export const transfersRef     = ref(db, 'jawaher_transfers');
 
 // ── Re-export Firebase helpers so app.js only imports from here ──
 export { ref, push, onValue, update, remove, get };

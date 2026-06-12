@@ -4,7 +4,7 @@
 
 import {
     db, ordersRef, logsRef, warehouseRef, returnsRef,
-    purchasesRef, defPagesRef, defUsersRef, sysUsersRef, customColorsRef,
+    purchasesRef, defPagesRef, defUsersRef, sysUsersRef, customColorsRef, transfersRef,
     ref, push, onValue, update, remove, get
 } from "./firebase-config.js";
 
@@ -18,7 +18,7 @@ window.app = {
 
     // ── State ────────────────────────────────────────────────
     user: null, role: null, userName: null,
-    orders: {}, warehouse: {}, returns: {}, purchases: {},
+    orders: {}, warehouse: {}, returns: {}, purchases: {}, transfers: {},
     pages: [], entryUsers: [],
     charts: {},
     selectedR: new Set(), selectedKb: new Set(),
@@ -31,7 +31,7 @@ window.app = {
     logsData: {},
     nimSizeRows: [],
     sysUsers: {},
-    _fbReady: { orders: false, warehouse: false, returns: false, purchases: false },
+    _fbReady: { orders: false, warehouse: false, returns: false, purchases: false, transfers: false },
     _listenersStarted: false,
     auditData: {},
     customColors: [],   // ألوان مخصصة من Firebase تُضاف لـ COLORS_AR
@@ -308,6 +308,7 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
         if (id === 'returns') this.renderReturnsList();
         if (id === 'definitions') this.renderDefinitions();
         if (id === 'logs') this.renderLogs();
+        if (id === 'transfer')     this.renderTransferPage();
         if (id === 'movement')    this.renderMovementTable();
         if (id === 'customers')   { if (this.role === 'Admin') this.renderCustomers(); }
         if (id === 'users')       { if (this.role === 'Admin') this.renderUsersPage(); }
@@ -432,6 +433,11 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
             this._fbReady.purchases = true; this._hideSyncOverlay();
             this.updateCurrentPage();
         });
+        onValue(transfersRef, snap => {
+            this.transfers = snap.val() || {};
+            this._fbReady.transfers = true; this._hideSyncOverlay();
+            this.updateCurrentPage();
+        });
         onValue(defPagesRef, snap => {
             this.pages = snap.val() ? Object.entries(snap.val()).map(([id, v]) => ({ id, name: v.name })) : [];
             this._cacheSet('pages', this.pages);
@@ -495,6 +501,7 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
     if (id === 'returns') this.renderReturnsList();
     if (id === 'definitions') this.renderDefinitions();
     if (id === 'logs') this.renderLogs();
+    if (id === 'transfer')    this.renderTransferPage();
     if (id === 'movement') this.renderMovementTable();
     if (id === 'customers' && this.role === 'Admin') this.renderCustomers();
     },
@@ -697,9 +704,10 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
             if (target) {
                 target.value = c.name;
                 target.dataset.hex = c.hex;
-                if (targetId.startsWith('ir_color_')) {
+                if (targetId.startsWith('ir_color_') || targetId.startsWith('tr_color_')) {
                     const rowIdx = target.dataset.idx;
-                    const preview = document.getElementById(`ir_color_preview_${rowIdx}`);
+                    const prefix = targetId.startsWith('tr_color_') ? 'tr' : 'ir';
+                    const preview = document.getElementById(`${prefix}_color_preview_${rowIdx}`);
                     if (preview) {
                         const bg = c.rainbow ? 'linear-gradient(135deg,#ff0000,#ff7700,#ffff00,#00ff00,#0000ff,#8b00ff)' : c.hex;
                         preview.innerHTML = `<span style="width:18px;height:18px;border-radius:5px;background:${bg};border:1.5px solid rgba(0,0,0,.12);flex-shrink:0;display:inline-block"></span>
@@ -707,7 +715,8 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
                         preview.style.borderColor = c.rainbow ? 'transparent' : c.hex;
                         preview.style.boxShadow = `0 0 0 2px ${c.hex}22`;
                     }
-                    app.loadRowSizes(parseInt(rowIdx), null, c.name);
+                    if (prefix === 'ir') app.loadRowSizes(parseInt(rowIdx), null, c.name);
+                    else app._trLoadSizes(parseInt(rowIdx), null, c.name);
                 } else {
                     if (c.rainbow) {
                         target.style.borderRight = '4px solid transparent';
@@ -1726,10 +1735,7 @@ async deductStock(orderId) {
             const bcVal = id.slice(-12).toUpperCase();
 
             let sellPrice = '';
-            for (const it of items) {
-                const w = this.warehouse[it.itemId];
-                if (w?.sellPrice) { sellPrice = w.sellPrice; break; }
-            }
+            // sellPrice removed from label per request — only total price shown
 
             const ICONS = {
                 'واتس اب' : `<svg width="10" height="10" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.557 4.126 1.526 5.858L.057 23.888a.5.5 0 0 0 .617.6l6.162-1.615A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.694-.528-5.217-1.446l-.374-.224-3.878 1.016 1.033-3.772-.244-.389A9.952 9.952 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>واتس`,
@@ -1761,7 +1767,6 @@ async deductStock(orderId) {
         <div class="lf"><div class="lfl">الصنف</div><div class="lfv litem">${itemNames}</div></div>
         <div class="lf lfsm"><div class="lfl">اللون</div><div class="lfv">${itemColors}</div></div>
         <div class="lf lfsm"><div class="lfl">المقاس</div><div class="lfv">${itemSizes}</div></div>
-        ${sellPrice ? `<div class="lf lfsm"><div class="lfl">سعر القطعة</div><div class="lfv" style="color:#1A6B4A;font-weight:800">${sellPrice} JOD</div></div>` : ''}
         ${weightHtml}
       </div>
       <div class="lc lcl">
@@ -1797,23 +1802,23 @@ body { margin: 0 }
 .lp  { width:10cm; height:10cm; display:flex; align-items:stretch; padding:2.5mm; overflow:hidden }
 .li  { width:100%; display:flex; flex-direction:column; border:2px solid #1A3A8F; border-radius:5px; overflow:hidden }
 .lh  { background:#0F2260; color:#fff; padding:3px 6px; border-bottom:1.5px solid #1A3A8F; flex-shrink:0 }
-.lpn { font-size:10pt; font-weight:800; color:#7AA0F0; text-align:center; letter-spacing:.4px }
-.lsh { display:flex; justify-content:center; gap:8px; font-size:6pt; color:#aabde0; margin-top:1px }
+.lpn { font-size:11pt; font-weight:800; color:#7AA0F0; text-align:center; letter-spacing:.4px }
+.lsh { display:flex; justify-content:center; gap:8px; font-size:7pt; color:#aabde0; margin-top:1px }
 .lb  { flex:1; display:grid; grid-template-columns:1fr 1fr; overflow:hidden; min-height:0 }
 .lc  { display:flex; flex-direction:column; gap:1.5px; padding:3px; overflow:hidden; min-width:0 }
 .lcr { border-left:1px solid #ccd }
 .lf  { background:#f4f6ff; border:1px solid #dde; border-radius:3px; padding:2px 4px; overflow:hidden; flex-shrink:1 }
 .lfsm { flex-shrink:0 }
-.lfl  { font-size:5.5pt; color:#555; font-weight:700; line-height:1.2 }
-.lfv  { font-size:7pt; font-weight:700; color:#111; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-.lname  { font-size:9pt;   font-weight:800; white-space:normal; line-height:1.15 }
-.litem  { font-size:7.5pt; font-weight:800; white-space:normal; line-height:1.15 }
-.laddr  { font-size:6.5pt; white-space:normal; line-height:1.2 }
-.lphone { font-size:9.5pt; font-weight:800; text-align:right }
+.lfl  { font-size:6.5pt; color:#555; font-weight:700; line-height:1.2 }
+.lfv  { font-size:8pt; font-weight:700; color:#111; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.lname  { font-size:10pt;  font-weight:800; white-space:normal; line-height:1.15 }
+.litem  { font-size:8.5pt; font-weight:800; white-space:normal; line-height:1.15 }
+.laddr  { font-size:7.5pt; white-space:normal; line-height:1.2 }
+.lphone { font-size:10.5pt; font-weight:800; text-align:right }
 .lprice-box { background:#e6f4ed !important; border-color:#1A6B4A !important; flex-shrink:0 }
-.lprice { font-size:11pt; font-weight:800; color:#1A6B4A }
-.lnotes { font-size:6pt; white-space:normal; line-height:1.2 }
-.lwarn  { background:#FFF0F0; border:1.5px solid #C02525; border-radius:3px; padding:2px 4px; font-size:6.5pt; font-weight:800; color:#C02525; text-align:center; flex-shrink:0; margin-top:auto }
+.lprice { font-size:13pt; font-weight:800; color:#1A6B4A }
+.lnotes { font-size:7pt; white-space:normal; line-height:1.2 }
+.lwarn  { background:#FFF0F0; border:1.5px solid #C02525; border-radius:3px; padding:2px 4px; font-size:7.5pt; font-weight:800; color:#C02525; text-align:center; flex-shrink:0; margin-top:auto }
 .lbc    { text-align:center; padding:1px 4px 2px; border-top:1px solid #dde; flex-shrink:0; background:#fff; display:flex; align-items:center; justify-content:center; gap:6px }
 .lbc svg { max-width:100%; height:auto !important }
 .lbc-price { font-size:9pt; font-weight:800; color:#1A6B4A; white-space:nowrap; border:1.5px solid #1A6B4A; border-radius:4px; padding:1px 6px; background:#e6f4ed }`;
@@ -1835,8 +1840,16 @@ ${labelsHtml}
       try {
         JsBarcode('#' + barcodes[i].id, barcodes[i].val, {
           format: 'CODE128', width: 1.3, height: 26,
-          displayValue: true, fontSize: 9, margin: 2, background: 'transparent'
+          displayValue: true, fontSize: 10, margin: 2, background: 'transparent',
+          textAlign: 'center', font: 'Almarai'
         });
+        // Force LTR on the barcode SVG text
+        var svgEl = document.getElementById(barcodes[i].id);
+        if (svgEl) {
+          svgEl.setAttribute('dir','ltr');
+          var texts = svgEl.querySelectorAll('text');
+          texts.forEach(function(t){ t.setAttribute('direction','ltr'); t.setAttribute('unicode-bidi','bidi-override'); });
+        }
       } catch(e) { console.warn('barcode error', barcodes[i].id, e); }
     }
     // تأخير 800ms بعد الرسم لضمان اكتمال التخطيط قبل الطباعة
@@ -2252,6 +2265,7 @@ ${labelsHtml}
                         </div>
                         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
                             <button class="btn-j btn-gold btn-xs-j" style="flex:1" onclick="app.openAddStockModal('${id}')"><i class="fas fa-plus"></i> إضافة كمية</button>
+                            <button class="btn-j btn-ghost btn-xs-j" onclick="app.renameWarehouseItem('${id}')" title="تغيير الاسم"><i class="fas fa-pencil-alt" style="color:var(--gold)"></i></button>
                             <button class="btn-j btn-emerald btn-xs-j" style="flex:1" onclick="app.openInventoryCorrection('${id}')" title="تصحيح جرد"><i class="fas fa-clipboard-check"></i> جرد</button>
                             <button class="btn-j btn-sapphire btn-xs-j" onclick="app.viewMovement('${id}')" title="حركة الصنف"><i class="fas fa-history"></i></button>
                             <button class="btn-j btn-ruby btn-xs-j" onclick="app.deleteItem('${id}')" title="حذف"><i class="fas fa-trash"></i></button>
@@ -4445,6 +4459,374 @@ updateRetSizes(itemIdx) {
         return String(v).slice(0, 50);
     },
 
+
+    // ============ RENAME WAREHOUSE ITEM (updates all orders) ============
+    async renameWarehouseItem(itemId) {
+        const item = this.warehouse[itemId]; if (!item) return;
+        const newName = prompt('الاسم الجديد للموديل:', item.name);
+        if (!newName || newName.trim() === item.name) return;
+        const trimmed = newName.trim();
+        if (!confirm(`تغيير اسم "${item.name}" إلى "${trimmed}"؟\nسيتم تحديث جميع الطلبات السابقة أيضاً.`)) return;
+
+        const updates = {};
+        // 1. rename in warehouse
+        updates[`jawaher_warehouse/${itemId}/name`] = trimmed;
+        // 2. update all orders that reference this item
+        Object.entries(this.orders).forEach(([oid, o]) => {
+            if (o.itemId === itemId) {
+                updates[`jawaher_orders/${oid}/itemName`] = trimmed;
+            }
+            if (o.items) {
+                let changed = false;
+                const newItems = o.items.map(it => {
+                    if (it.itemId === itemId) { changed = true; return { ...it, itemName: trimmed }; }
+                    return it;
+                });
+                if (changed) updates[`jawaher_orders/${oid}/items`] = newItems;
+            }
+        });
+        // 3. update purchases
+        Object.entries(this.purchases).forEach(([pid, p]) => {
+            if (p.itemId === itemId) updates[`jawaher_purchases/${pid}/itemName`] = trimmed;
+        });
+        // 4. update returns
+        Object.entries(this.returns).forEach(([rid, r]) => {
+            if (r.itemId === itemId) updates[`jawaher_returns/${rid}/itemName`] = trimmed;
+        });
+        // 5. update transfers
+        Object.entries(this.transfers).forEach(([tid, t]) => {
+            if (t.items) {
+                let changed = false;
+                const newItems = t.items.map(it => {
+                    if (it.itemId === itemId) { changed = true; return { ...it, itemName: trimmed }; }
+                    return it;
+                });
+                if (changed) updates[`jawaher_transfers/${tid}/items`] = newItems;
+            }
+        });
+
+        await update(ref(db), updates);
+        this.log('rename_item', itemId, `تغيير اسم الموديل: "${item.name}" → "${trimmed}"`);
+        this.toast(`تم تغيير الاسم إلى "${trimmed}" ✓`, 'success');
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // ████████╗██████╗  █████╗ ███╗   ██╗███████╗███████╗███████╗██████╗
+    // ╚══██╔══╝██╔══██╗██╔══██╗████╗  ██║██╔════╝██╔════╝██╔════╝██╔══██╗
+    //    ██║   ██████╔╝███████║██╔██╗ ██║███████╗█████╗  █████╗  ██████╔╝
+    //    ██║   ██╔══██╗██╔══██║██║╚██╗██║╚════██║██╔══╝  ██╔══╝  ██╔══██╗
+    //    ██║   ██║  ██║██║  ██║██║ ╚████║███████║██║     ██║     ██║  ██║
+    //    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚═╝     ╚═╝     ╚═╝  ╚═╝
+    // ════ مستودع المؤسسة — INSTITUTION TRANSFER MODULE ════
+
+    // Transfer rows state
+    _transferRows: [],
+
+    renderTransferPage() {
+        if (this._transferRows.length === 0) this._transferRows = [{ id: Date.now() }];
+        const dateEl = document.getElementById('trDate');
+        if (dateEl && !dateEl.value) dateEl.value = new Date().toLocaleDateString('en-GB');
+        this._renderTransferRows();
+        this._renderTransferHistory();
+    },
+
+    _renderTransferItemRow(row, idx) {
+        const items = Object.entries(this.warehouse);
+        return `<div class="item-row-card" id="tr_row_${idx}">
+            <div class="item-row-header">
+                <span class="item-row-num">${idx + 1}</span>
+                ${idx > 0 ? `<button class="btn-j btn-ruby btn-xs-j item-row-del" onclick="app._trRemoveRow(${idx})"><i class="fas fa-times"></i> حذف</button>` : '<span></span>'}
+            </div>
+            <div class="item-row-fields">
+                <div class="item-row-field item-row-product">
+                    <label class="form-label-j">الصنف <span style="color:var(--ruby-light)">*</span></label>
+                    <input type="text" class="form-control-j tr-item-inp" data-idx="${idx}" id="tr_item_inp_${idx}"
+                        placeholder="ابحث عن صنف..." autocomplete="off"
+                        value="${row.itemName || ''}"
+                        oninput="app._trItemSearch(${idx}, this.value)"
+                        onfocus="app._trItemSearch(${idx}, this.value)"
+                        onblur="setTimeout(()=>app._trCloseDD(${idx}),200)">
+                </div>
+                <div class="item-row-field item-row-color">
+                    <label class="form-label-j">اللون</label>
+                    <div style="display:flex;gap:4px;align-items:stretch">
+                        <div id="tr_color_preview_${idx}"
+                            onclick="app._trOpenColor(${idx})"
+                            style="display:flex;align-items:center;gap:7px;flex:1;min-width:0;
+                                   padding:.42rem .65rem;border-radius:10px;cursor:pointer;
+                                   border:1.5px solid var(--border);background:var(--paper);
+                                   transition:border-color .18s;user-select:none"
+                            onmouseenter="this.style.borderColor='var(--gold)'"
+                            onmouseleave="this.style.borderColor='var(--border)'">
+                            ${row.colorHex
+                                ? `<span style="width:18px;height:18px;border-radius:5px;background:${row.colorHex};border:1.5px solid rgba(0,0,0,.12);flex-shrink:0;display:inline-block"></span>
+                                   <span style="font-size:.82rem;font-weight:600;color:var(--ink)">${row.color}</span>`
+                                : `<i class="fas fa-palette" style="color:var(--gold);font-size:.85rem"></i>
+                                   <span style="font-size:.82rem;color:var(--ink-mid)">اختر اللون...</span>`
+                            }
+                        </div>
+                        <input type="hidden" id="tr_color_${idx}" value="${row.color || ''}" data-hex="${row.colorHex || ''}" data-idx="${idx}">
+                        <button id="tr_color_btn_${idx}" class="btn-j btn-ghost btn-xs-j" onclick="app._trOpenColor(${idx})" style="padding:.3rem .5rem;flex-shrink:0">
+                            <i class="fas fa-palette" style="color:var(--gold)"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="item-row-field item-row-size">
+                    <label class="form-label-j">المقاس <span style="color:var(--ruby-light)">*</span></label>
+                    <div class="select-wrapper">
+                        <select class="form-control-j select-j tr-size" data-idx="${idx}" onchange="app._trSizeChange(${idx})">
+                            <option value="">المقاس</option>
+                        </select>
+                    </div>
+                    <div class="ir-stock" data-idx="${idx}" id="tr_stock_${idx}"></div>
+                </div>
+                <div class="item-row-field item-row-qty">
+                    <label class="form-label-j">الكمية</label>
+                    <div class="qty-control">
+                        <button class="qty-btn" onclick="app._trAdjQty(${idx},-1)">−</button>
+                        <input type="number" class="form-control-j qty-input tr-qty" data-idx="${idx}" value="${row.qty || 1}" min="1">
+                        <button class="qty-btn" onclick="app._trAdjQty(${idx},1)">+</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    },
+
+    _trItemSearch(idx, val) {
+        const inp = document.getElementById(`tr_item_inp_${idx}`);
+        if (!inp) return;
+        document.getElementById(`tr_dd_${idx}`)?.remove();
+        const q = val.trim().toLowerCase();
+        const items = Object.entries(this.warehouse);
+        const matches = q === '' ? items : items.filter(([, w]) => w.name.toLowerCase().includes(q));
+        if (!matches.length) return;
+        const rect = inp.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const ddH = Math.min(matches.length * 50, 220);
+        const showAbove = spaceBelow < ddH + 20 && rect.top > ddH;
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const dd = document.createElement('div');
+        dd.id = `tr_dd_${idx}`;
+        dd.style.cssText = `position:fixed;z-index:99999;background:${isDark?'#1a1a2e':'#fff'};border:1.5px solid #C9A84C;border-radius:10px;max-height:220px;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.55);width:${rect.width}px;left:${rect.left}px;${showAbove?`bottom:${window.innerHeight-rect.top+4}px`:`top:${rect.bottom+4}px`}`;
+        dd.innerHTML = matches.map(([id, w]) => {
+            const total = Object.values(w.sizes||{}).reduce((a,b)=>a+b,0);
+            const clr = total===0?'var(--ruby-light)':total<=3?'#f0a500':'var(--emerald)';
+            return `<div onclick="app._trSelectItem(${idx},'${w.name.replace(/'/g,"\\'")}','${id}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);font-size:.88rem" onmouseenter="this.style.background='rgba(201,168,76,.12)'" onmouseleave="this.style.background=''">
+                <span style="flex:1;font-weight:700">${w.name}</span>
+                <span style="font-size:.72rem;color:${clr};font-weight:700;background:${clr}18;padding:2px 7px;border-radius:10px">${total} قطعة</span>
+            </div>`;
+        }).join('');
+        document.body.appendChild(dd);
+    },
+
+    _trSelectItem(idx, name, id) {
+        document.getElementById(`tr_item_inp_${idx}`).value = name;
+        document.getElementById(`tr_dd_${idx}`)?.remove();
+        if (this._transferRows[idx]) { this._transferRows[idx].itemName = name; this._transferRows[idx].itemId = id; }
+        this._trLoadColors(idx);
+    },
+
+    _trCloseDD(idx) { document.getElementById(`tr_dd_${idx}`)?.remove(); },
+
+    _trOpenColor(idx) {
+        // Use existing color picker mechanism
+        const hiddenInp = document.getElementById(`tr_color_${idx}`);
+        if (!hiddenInp) return;
+        // Get available colors for this item
+        const row = this._transferRows[idx];
+        if (row?.itemId) {
+            const item = this.warehouse[row.itemId];
+            const colorSet = new Set();
+            Object.entries(item?.sizes||{}).forEach(([s,q])=>{
+                if (q<=0) return;
+                let c = s.includes(' - ') ? s.split(' - ').slice(1).join(' - ') : (item.color||'');
+                if (c) colorSet.add(c);
+            });
+            hiddenInp.dataset.availableColors = JSON.stringify([...colorSet]);
+        }
+        hiddenInp.dataset.idx = idx;
+        // hijack openColorPicker
+        this.openColorPicker(idx, 'tr_color');
+    },
+
+    _trLoadColors(idx) {
+        const row = this._transferRows[idx];
+        const colorInp = document.getElementById(`tr_color_${idx}`);
+        const sizeSel = document.querySelector(`.tr-size[data-idx="${idx}"]`);
+        const stockEl = document.getElementById(`tr_stock_${idx}`);
+        if (colorInp) { colorInp.value=''; colorInp.dataset.hex=''; }
+        if (sizeSel) sizeSel.innerHTML = '<option value="">المقاس</option>';
+        if (stockEl) stockEl.textContent = '';
+        if (!row?.itemId) return;
+        const item = this.warehouse[row.itemId];
+        if (!item) return;
+        const colorSet = new Set();
+        Object.entries(item.sizes||{}).forEach(([s,q])=>{
+            if (q<=0) return;
+            let c = s.includes(' - ') ? s.split(' - ').slice(1).join(' - ') : (item.color||'');
+            if (c) colorSet.add(c);
+        });
+        if (colorInp) colorInp.dataset.availableColors = JSON.stringify([...colorSet]);
+        this._trLoadSizes(idx, null, null);
+    },
+
+    _trLoadSizes(idx, preSize, filterColor) {
+        const row = this._transferRows[idx];
+        const sizeSel = document.querySelector(`.tr-size[data-idx="${idx}"]`);
+        const stockEl = document.getElementById(`tr_stock_${idx}`);
+        const colorInp = document.getElementById(`tr_color_${idx}`);
+        if (!sizeSel || !row?.itemId) return;
+        const item = this.warehouse[row.itemId];
+        if (!item) return;
+        const colorF = filterColor || colorInp?.value || null;
+        sizeSel.innerHTML = '<option value="">المقاس</option>';
+        Object.entries(item.sizes||{}).forEach(([key, q]) => {
+            let dispSize = key, keyColor = '';
+            if (key.includes(' - ')) { dispSize = key.split(' - ')[0]; keyColor = key.split(' - ').slice(1).join(' - '); }
+            else if (item.color) keyColor = item.color;
+            if (colorF && keyColor !== colorF) return;
+            if (q > 0 || preSize === key)
+                sizeSel.innerHTML += `<option value="${key}" data-qty="${q}" ${preSize===key?'selected':''}>${dispSize} (${q})</option>`;
+        });
+        const showStock = () => {
+            const opt = sizeSel.selectedOptions[0];
+            const qty = opt?.dataset?.qty || 0;
+            if (stockEl) { stockEl.textContent = qty > 0 ? `✓ متوفر: ${qty}` : '✗ نفد'; stockEl.style.color = qty > 0 ? 'var(--emerald)' : 'var(--ruby-light)'; }
+        };
+        sizeSel.onchange = showStock;
+        if (preSize) showStock();
+    },
+
+    _trSizeChange(idx) {
+        const sizeSel = document.querySelector(`.tr-size[data-idx="${idx}"]`);
+        const stockEl = document.getElementById(`tr_stock_${idx}`);
+        const opt = sizeSel?.selectedOptions[0];
+        const qty = opt?.dataset?.qty || 0;
+        if (stockEl) { stockEl.textContent = qty > 0 ? `✓ متوفر: ${qty}` : '✗ نفد'; stockEl.style.color = qty > 0 ? 'var(--emerald)' : 'var(--ruby-light)'; }
+    },
+
+    _trAdjQty(idx, delta) {
+        const el = document.querySelector(`.tr-qty[data-idx="${idx}"]`);
+        if (el) el.value = Math.max(1, (parseInt(el.value)||1) + delta);
+    },
+
+    _trRemoveRow(idx) {
+        if (this._transferRows.length <= 1) return;
+        this._transferRows.splice(idx, 1);
+        this._renderTransferRows();
+    },
+
+    _trAddRow() {
+        this._transferRows.push({ id: Date.now() });
+        this._renderTransferRows();
+    },
+
+    _renderTransferRows() {
+        const container = document.getElementById('trItemsList');
+        if (!container) return;
+        container.innerHTML = this._transferRows.map((row, idx) => this._renderTransferItemRow(row, idx)).join('');
+        // Restore color pickers references after IR rows restored
+        this._transferRows.forEach((row, idx) => {
+            if (row.itemId) {
+                this._trLoadSizes(idx, row.exactKey, row.color);
+                const cInp = document.getElementById(`tr_color_${idx}`);
+                if (cInp && row.color) {
+                    cInp.value = row.color; cInp.dataset.hex = row.colorHex || '';
+                    // update preview
+                    const prev = document.getElementById(`tr_color_preview_${idx}`);
+                    if (prev && row.colorHex) {
+                        prev.innerHTML = `<span style="width:18px;height:18px;border-radius:5px;background:${row.colorHex};border:1.5px solid rgba(0,0,0,.12);flex-shrink:0;display:inline-block"></span>
+                            <span style="font-size:.82rem;font-weight:600;color:var(--ink)">${row.color}</span>`;
+                    }
+                }
+            }
+        });
+    },
+
+    async saveTransfer() {
+        const type = document.querySelector('input[name="trType"]:checked')?.value;
+        const notes = document.getElementById('trNotes')?.value.trim() || '';
+        const dateVal = document.getElementById('trDate')?.value || new Date().toLocaleDateString('en-GB');
+
+        if (!type) { this.toast('يرجى تحديد نوع العملية (استلام / تسليم)', 'error'); return; }
+
+        // collect rows
+        const items = [];
+        for (let i = 0; i < this._transferRows.length; i++) {
+            const itemInp = document.getElementById(`tr_item_inp_${i}`);
+            const sizeEl = document.querySelector(`.tr-size[data-idx="${i}"]`);
+            const colorInp = document.getElementById(`tr_color_${i}`);
+            const qtyInp = document.querySelector(`.tr-qty[data-idx="${i}"]`);
+
+            const itemName = itemInp?.value.trim();
+            const found = Object.entries(this.warehouse).find(([,w]) => w.name === itemName);
+            if (!found) { this.toast(`الصنف ${i+1}: يرجى اختيار صنف موجود`, 'error'); return; }
+            const [itemId, wItem] = found;
+            const sizeCombo = sizeEl?.value;
+            const color = colorInp?.value || '';
+            const qty = parseInt(qtyInp?.value) || 1;
+
+            if (!sizeCombo) { this.toast(`الصنف ${i+1}: يرجى اختيار المقاس`, 'error'); return; }
+
+            let finalSize = sizeCombo, finalColor = color;
+            if (sizeCombo.includes(' - ')) { finalSize = sizeCombo.split(' - ')[0]; finalColor = sizeCombo.split(' - ')[1]; }
+
+            items.push({ itemId, itemName: wItem.name, itemColor: finalColor, size: finalSize, exactKey: sizeCombo, qty });
+        }
+        if (!items.length) { this.toast('أضف صنفاً واحداً على الأقل', 'error'); return; }
+
+        // update warehouse
+        const updates = {};
+        for (const it of items) {
+            const wItem = this.warehouse[it.itemId]; if (!wItem) continue;
+            let key = it.exactKey || it.size;
+            const current = wItem.sizes?.[key] || 0;
+            const newQty = type === 'in' ? current + it.qty : Math.max(0, current - it.qty);
+            updates[`jawaher_warehouse/${it.itemId}/sizes/${key}`] = newQty;
+        }
+
+        // save transfer record
+        const payload = {
+            timestamp: Date.now(),
+            date: dateVal,
+            type,
+            items,
+            notes,
+            user: this.userName,
+            totalItems: items.reduce((s,it)=>s+it.qty,0)
+        };
+        updates[`jawaher_transfers/${Date.now()}_${Math.random().toString(36).substr(2,4)}`] = payload;
+
+        await update(ref(db), updates);
+        this.log('transfer', 'batch', `${type === 'in' ? 'استلام' : 'تسليم'} مستودع المؤسسة — ${items.length} صنف`);
+        this.toast(`تم تسجيل ${type === 'in' ? 'الاستلام' : 'التسليم'} بنجاح ✓`, 'success');
+
+        // reset
+        this._transferRows = [{ id: Date.now() }];
+        this._renderTransferRows();
+        document.getElementById('trNotes').value = '';
+        document.getElementById('trDate').value = new Date().toLocaleDateString('en-GB');
+        this._renderTransferHistory();
+    },
+
+    _renderTransferHistory() {
+        const el = document.getElementById('transferHistory'); if (!el) return;
+        const entries = Object.values(this.transfers).sort((a,b)=>b.timestamp-a.timestamp).slice(0,30);
+        if (!entries.length) { el.innerHTML = `<div style="text-align:center;color:var(--ink-mid);padding:2rem"><i class="fas fa-inbox fa-2x" style="opacity:.2;display:block;margin-bottom:1rem"></i>لا توجد حركات</div>`; return; }
+        el.innerHTML = entries.map(t => {
+            const clr = t.type === 'in' ? 'var(--emerald)' : 'var(--ruby-light)';
+            const icon = t.type === 'in' ? 'fa-arrow-circle-down' : 'fa-arrow-circle-up';
+            const label = t.type === 'in' ? 'استلام' : 'تسليم';
+            return `<div style="background:var(--paper-warm);border:1px solid var(--border);border-radius:12px;padding:.85rem;margin-bottom:.6rem;border-right:4px solid ${clr}">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                    <span style="font-weight:800;font-size:.9rem;color:${clr}"><i class="fas ${icon}"></i> ${label}</span>
+                    <span style="font-size:.75rem;color:var(--ink-mid)" dir="ltr">${t.date||''} — ${t.user||''}</span>
+                </div>
+                ${(t.items||[]).map(it=>`<div style="font-size:.78rem;border-bottom:1px dashed var(--border);padding:2px 0">• ${it.itemName} | ${it.itemColor||''} | ${it.size} × <strong>${it.qty}</strong></div>`).join('')}
+                ${t.notes ? `<div style="font-size:.72rem;color:var(--ink-mid);margin-top:.4rem;font-style:italic"><i class="fas fa-sticky-note" style="color:var(--gold)"></i> ${t.notes}</div>` : ''}
+            </div>`;
+        }).join('');
+    },
 
     initKeys() {
         document.addEventListener('keydown', e => {

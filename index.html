@@ -175,6 +175,7 @@
             <button class="nav-btn admin-only" data-page="warehouse"   onclick="app.gotoPage('warehouse')"  ><i class="fas fa-warehouse"></i>    المستودع</button>
             <button class="nav-btn admin-only" data-page="purchase"    onclick="app.gotoPage('purchase')"   ><i class="fas fa-shopping-cart"></i> المشتريات</button>
             <button class="nav-btn admin-only" data-page="returns"     onclick="app.gotoPage('returns')"    ><i class="fas fa-undo-alt"></i>     المرتجعات</button>
+            <button class="nav-btn admin-only" data-page="transfer"    onclick="app.gotoPage('transfer')"   ><i class="fas fa-exchange-alt"></i>  مستودع المؤسسة</button>
             <button class="nav-btn admin-only" data-page="definitions" onclick="app.gotoPage('definitions')"><i class="fas fa-cog"></i>          التعريفات</button>
             <button class="nav-btn admin-only" data-page="logs"        onclick="app.gotoPage('logs')"       ><i class="fas fa-history"></i>      السجل</button>
             <button class="nav-btn admin-only" data-page="customers"  onclick="app.gotoPage('customers')"  ><i class="fas fa-users"></i>        العملاء</button>
@@ -693,6 +694,66 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ════ INSTITUTION TRANSFER ════ -->
+            <div id="page-transfer" class="page">
+                <div class="page-header">
+                    <h1 class="page-title">مستودع المؤسسة</h1>
+                    <p class="page-subtitle">استلام أو تسليم بضاعة من/إلى مستودع المؤسسة</p>
+                </div>
+                <div class="row g-4">
+                    <div class="col-lg-7">
+                        <div class="card-j p-4">
+                            <div style="font-weight:800;margin-bottom:1.25rem;font-size:1.1rem">
+                                <i class="fas fa-exchange-alt" style="color:var(--gold)"></i> تسجيل حركة جديدة
+                            </div>
+                            <!-- نوع الحركة -->
+                            <div style="display:flex;gap:1rem;margin-bottom:1.5rem">
+                                <label style="flex:1;display:flex;align-items:center;gap:.6rem;padding:.85rem 1rem;border-radius:12px;cursor:pointer;border:2px solid var(--emerald);background:rgba(26,107,74,.06);font-weight:800;font-size:.95rem">
+                                    <input type="radio" name="trType" value="in" style="accent-color:var(--emerald);width:18px;height:18px" checked>
+                                    <i class="fas fa-arrow-circle-down" style="color:var(--emerald);font-size:1.2rem"></i>
+                                    <span style="color:var(--emerald)">استلام من المؤسسة</span>
+                                </label>
+                                <label style="flex:1;display:flex;align-items:center;gap:.6rem;padding:.85rem 1rem;border-radius:12px;cursor:pointer;border:2px solid var(--ruby-light);background:rgba(192,37,86,.06);font-weight:800;font-size:.95rem">
+                                    <input type="radio" name="trType" value="out" style="accent-color:var(--ruby-light);width:18px;height:18px">
+                                    <i class="fas fa-arrow-circle-up" style="color:var(--ruby-light);font-size:1.2rem"></i>
+                                    <span style="color:var(--ruby-light)">تسليم للمؤسسة</span>
+                                </label>
+                            </div>
+
+                            <!-- قائمة الأصناف -->
+                            <div id="trItemsList" style="margin-bottom:1rem"></div>
+                            <button class="add-item-row-btn" onclick="app._trAddRow()">
+                                <i class="fas fa-plus-circle" style="color:var(--gold)"></i> إضافة صنف آخر
+                            </button>
+
+                            <!-- الحقول الإضافية -->
+                            <div class="row g-3 mt-2">
+                                <div class="col-md-6">
+                                    <label class="form-label-j">تاريخ الحركة</label>
+                                    <input type="text" id="trDate" class="form-control-j" placeholder="dd/mm/yyyy">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label-j">ملاحظات</label>
+                                    <input type="text" id="trNotes" class="form-control-j" placeholder="أي ملاحظات إضافية...">
+                                </div>
+                            </div>
+                            <button class="btn-j btn-gold w-100 mt-4" onclick="app.saveTransfer()" style="font-size:1rem;padding:.85rem">
+                                <i class="fas fa-save"></i> تأكيد وحفظ الحركة
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="card-j p-4 h-100">
+                            <div style="font-weight:800;margin-bottom:1.25rem;font-size:1rem">
+                                <i class="fas fa-history" style="color:var(--gold)"></i> سجل الحركات
+                            </div>
+                            <div id="transferHistory" style="max-height:560px;overflow-y:auto"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ════ END INSTITUTION TRANSFER ════ -->
 
             <!-- ════ DEFINITIONS ════ -->
             <div id="page-definitions" class="page">
