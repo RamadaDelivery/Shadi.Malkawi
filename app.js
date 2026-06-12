@@ -884,8 +884,9 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
     // ============ ITEM ROWS (multi-product entry) ============
     initItemRows() {
         if (!document.getElementById('eItemsList')) return;
+        this._activeItemsContainerId = 'eItemsList';
         this.itemRows = [{ id: Date.now() }];
-        this.renderItemRows();
+        this._renderItemRowsInContainer('eItemsList');
     },
 addItemRow() {
         this._saveItemRowsState();
@@ -897,14 +898,14 @@ addItemRow() {
         }
 
         this.itemRows.push({ id: Date.now() });
-        this.renderItemRows();
-    },
+        this._renderItemRowsInContainer(this._activeItemsContainerId || 'eItemsList');
+    },
 
     removeItemRow(idx) {
         if (this.itemRows.length <= 1) return;
         this._saveItemRowsState();
         this.itemRows.splice(idx, 1);
-        this.renderItemRows();
+        this._renderItemRowsInContainer(this._activeItemsContainerId || 'eItemsList');
     },
 
     _saveItemRowsState() {
@@ -921,8 +922,17 @@ addItemRow() {
     },
 
     renderItemRows() {
-        const container = document.getElementById('eItemsList');
+        // الـ container الافتراضي هو eItemsList (للـ wizard)
+        // في modal إضافة صنف للطلب نستخدم eItemsListModal
+        const containerId = document.getElementById('eItemsListModal') ? 'eItemsListModal' : 'eItemsList';
+        this._renderItemRowsInContainer(containerId);
+    },
+
+    _renderItemRowsInContainer(containerId) {
+        const container = document.getElementById(containerId);
         if (!container) return;
+        // حفظ containerId الحالي لاستخدامه في addItemRow
+        this._activeItemsContainerId = containerId;
         container.innerHTML = this.itemRows.map((row, idx) => `
             <div class="item-row-card" id="itemrow_${idx}">
                 <!-- Row header: number + delete -->
@@ -1542,7 +1552,7 @@ addItemRow() {
         <div class="modal-sheet" style="max-width:480px">
             <div class="modal-handle"></div>
             <div class="modal-title"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> إضافة صنف للطلب</div>
-            <div id="addItemRows"><div id="eItemsList" style="display:block"></div></div>
+            <div id="addItemRows"><div id="eItemsListModal" style="display:block"></div></div>
             <button class="add-item-row-btn mt-2" onclick="app.addItemRow()"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> صنف آخر</button>
             <div class="d-flex gap-3 mt-4">
                 <button class="btn-j btn-gold flex-fill" onclick="app._confirmAddItemsToOrder('${orderId}')">
@@ -1553,7 +1563,7 @@ addItemRow() {
         </div>`;
         document.body.appendChild(modal);
         this.itemRows = [{ id: Date.now() }];
-        this.renderItemRows();
+        this._renderItemRowsInContainer('eItemsListModal');
     },
 
     async _confirmAddItemsToOrder(orderId) {
@@ -1683,7 +1693,9 @@ async updateOrder() {
         const o = this.orders[id];
         const updates = {};
         // إرجاع المخزون إذا كان الطلب مخصوماً مسبقاً
-        if (o && o.stockDeducted) {
+        // return stock if deducted OR if order has items with itemId (safety fallback)
+        const hasStockToReturn = o && (o.stockDeducted || (o.items && o.items.some(i => i.itemId)) || o.itemId);
+        if (hasStockToReturn) {
             const itemsToReturn = o.items || [{ itemId: o.itemId, size: o.exactKey || o.size, exactKey: o.exactKey, itemColor: o.itemColor, qty: o.qty }];
             for (const it of itemsToReturn) {
                 if (!it.itemId) continue;
@@ -1696,11 +1708,11 @@ async updateOrder() {
                 updates[`jawaher_warehouse/${it.itemId}/sizes/${key}`] = current + (parseInt(it.qty) || 1);
             }
         }
-        await remove(ref(db, `jawaher_orders/${id}`));
         if (Object.keys(updates).length > 0) await update(ref(db), updates);
-        this.log('delete', id, `حذف الطلب${o?.stockDeducted ? ' (تم إرجاع المخزون)' : ''}`);
+        await remove(ref(db, `jawaher_orders/${id}`));
+        this.log('delete', id, `حذف الطلب${hasStockToReturn ? ' (تم إرجاع المخزون)' : ''}`);
         this._auditLog('order_delete', id, o, null, `حذف طلب ${o?.custName || ''} | السعر: ${o?.price || 0} JOD`);
-        this.toast('تم الحذف' + (o?.stockDeducted ? ' وإرجاع الكمية للمستودع' : ''), 'success');
+        this.toast('تم الحذف' + (hasStockToReturn ? ' وإرجاع الكمية للمستودع' : ''), 'success');
         this.closeModal('orderModal');
     },
 
@@ -1760,7 +1772,9 @@ async deductStock(orderId) {
     // ── إرجاع المخزون عند الإلغاء أو التأجيل ──────────────
     async _returnStock(orderId) {
         const o = this.orders[orderId]; if (!o) return;
-        if (!o.stockDeducted) return;
+        // return stock if deducted OR if order has items (safety fallback for orders missing the flag)
+        const shouldReturn = o.stockDeducted || (o.items && o.items.some(i => i.itemId)) || o.itemId;
+        if (!shouldReturn) return;
         const itemsToReturn = o.items || [{ itemId: o.itemId, size: o.exactKey || o.size, exactKey: o.exactKey, itemColor: o.itemColor, qty: o.qty }];
         const updates = {};
         for (const it of itemsToReturn) {
