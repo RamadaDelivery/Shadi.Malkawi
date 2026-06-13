@@ -1,418 +1,1050 @@
 /* ============================================================
-   style-shm.css — مؤسسة شادي الملكاوي | Brand Theme Override
-   يُحمَّل فوق style.css ويغلب عليه
+   style-macos.css — مؤسسة شادي الملكاوي
+   macOS Sequoia (Desktop) · iOS 18 (Mobile)
+   تُحمَّل آخراً — تُلغي style.css و style-shm.css
    ============================================================ */
 
 /* ══════════════════════════════════════════════════════════
-   Brand Color Tokens
+   1. DESIGN TOKENS — Apple-faithful palette
 ══════════════════════════════════════════════════════════ */
 :root {
-    --gold:        #1A3A8F;
-    --gold-light:  #2E5CC8;
-    --gold-dark:   #0F2260;
-    --gold-subtle: rgba(26, 58, 143, 0.08);
-    --shadow-gold:    0 8px 32px rgba(26,58,143,.22), 0 2px 8px rgba(26,58,143,.12);
-    --shadow-gold-sm: 0 4px 16px rgba(26,58,143,.18);
-    --ruby:        #8B1A1A;
-    --ruby-light:  #C02525;
-    --paper:       #F8FAFF;
-    --paper-warm:  #EEF2FF;
-    --paper-2:     #E3E9FF;
-    --border:      rgba(26, 58, 143, 0.18);
-    --border-2:    rgba(26, 58, 143, 0.08);
-    --border-strong: rgba(26, 58, 143, 0.35);
+    /* Apple System Blue */
+    --gold:        #007AFF;
+    --gold-light:  #409CFF;
+    --gold-dark:   #0055D4;
+    --gold-subtle: rgba(0, 122, 255, 0.09);
+    --shadow-gold:    0 4px 16px rgba(0,122,255,.22);
+    --shadow-gold-sm: 0 2px 8px rgba(0,122,255,.18);
+
+    /* Surfaces — macOS/iOS light mode */
+    --paper:       #F5F5F7;   /* Apple gray background */
+    --paper-warm:  #EBEBF0;
+    --paper-2:     #E5E5EA;
+    --ink:         #1C1C1E;   /* Apple label primary */
+    --ink-mid:     #6E6E73;   /* Apple label secondary */
+
+    /* Glass / vibrancy */
+    --glass:           rgba(255, 255, 255, 0.78);
+    --glass-dark:      rgba(28,  28,  30,  0.88);
+    --glass-card:      rgba(255, 255, 255, 0.72);
+    --glass-sidebar:   rgba(246, 246, 247, 0.92);
+
+    /* Borders */
+    --border:          rgba(0, 0, 0, 0.10);
+    --border-2:        rgba(0, 0, 0, 0.06);
+    --border-strong:   rgba(0, 0, 0, 0.18);
+
+    /* Semantic - Apple Human Interface */
+    --ruby:        #FF3B30;
+    --ruby-light:  #FF453A;
+    --emerald:     #34C759;
+    --amber:       #FF9500;
+    --violet:      #AF52DE;
+    --cyan:        #32ADE6;
+    --teal:        #30B0C7;
+
+    /* Radius — Apple uses 10-13px on cards, bigger on sheets */
+    --radius:      13px;
+    --radius-sm:   10px;
+    --radius-xs:   8px;
+    --radius-pill: 999px;
+    --radius-mac:  16px;
+    --radius-ios:  20px;
+
+    /* Shadows — soft, diffused */
+    --shadow-xs:  0 1px 3px rgba(0,0,0,.06);
+    --shadow-sm:  0 2px 8px rgba(0,0,0,.08),  0 1px 2px rgba(0,0,0,.04);
+    --shadow:     0 4px 16px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.05);
+    --shadow-md:  0 8px 28px rgba(0,0,0,.12), 0 4px 8px rgba(0,0,0,.06);
+    --shadow-lg:  0 20px 60px rgba(0,0,0,.14), 0 8px 16px rgba(0,0,0,.07);
+
+    /* Typography — SF Pro via system stack */
+    --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Almarai", sans-serif;
+    --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Almarai", sans-serif;
+
+    /* Status colors */
+    --status-new:        #FF9500;
+    --status-process:    #007AFF;
+    --status-done:       #34C759;
+    --status-delivered:  #AF52DE;
+    --status-postponed:  #FF6B00;
+    --status-canceled:   #FF3B30;
+    --status-stored:     #636366;
 }
 
+/* ── Dark Mode — macOS/iOS dark ──────────────────────── */
 [data-theme="dark"] {
-    --gold:        #4A7AE8;
-    --gold-light:  #7AA0F0;
-    --gold-dark:   #2E5CC8;
-    --gold-subtle: rgba(74, 122, 232, 0.12);
-    --paper:       #0D1528;
-    --paper-warm:  #111E38;
-    --paper-2:     #162240;
-    --border:      rgba(74, 122, 232, 0.22);
+    --paper:       #000000;   /* iOS dark system background */
+    --paper-warm:  #1C1C1E;
+    --paper-2:     #2C2C2E;
+    --ink:         #FFFFFF;
+    --ink-mid:     #EBEBF5CC;
+
+    --glass:           rgba(28,  28,  30,  0.82);
+    --glass-dark:      rgba(10,  10,  12,  0.94);
+    --glass-card:      rgba(44,  44,  46,  0.80);
+    --glass-sidebar:   rgba(28,  28,  30,  0.90);
+
+    --border:          rgba(255, 255, 255, 0.12);
+    --border-2:        rgba(255, 255, 255, 0.07);
+    --border-strong:   rgba(255, 255, 255, 0.20);
+
+    --gold:        #0A84FF;
+    --gold-light:  #409CFF;
+    --gold-dark:   #007AFF;
+    --gold-subtle: rgba(10, 132, 255, 0.12);
+    --shadow-gold:    0 4px 16px rgba(10,132,255,.28);
+    --shadow-gold-sm: 0 2px 8px rgba(10,132,255,.22);
+
+    --ruby:        #FF453A;
+    --ruby-light:  #FF6961;
+    --emerald:     #30D158;
+    --amber:       #FF9F0A;
+    --violet:      #BF5AF2;
+    --cyan:        #64D2FF;
+    --teal:        #40CBE0;
 }
 
 /* ══════════════════════════════════════════════════════════
-   INTRO SCREEN
+   2. BASE — SF Pro system font everywhere
+══════════════════════════════════════════════════════════ */
+html, body {
+    font-family: var(--font-system) !important;
+    background: var(--paper) !important;
+    color: var(--ink) !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* macOS subtle background texture */
+body::after {
+    content: '';
+    position: fixed; inset: 0; pointer-events: none; z-index: -1;
+    background:
+        radial-gradient(ellipse 80% 40% at 50% -10%, rgba(0,122,255,.04) 0%, transparent 60%);
+}
+
+/* ══════════════════════════════════════════════════════════
+   3. INTRO SCREEN — macOS boot aesthetic
 ══════════════════════════════════════════════════════════ */
 #introScreen {
-    background: linear-gradient(135deg, #0F2260 0%, #1A3A8F 50%, #2251C8 100%);
+    background: #000 !important;
 }
-.intro-diamond-ring {
-    border-color: rgba(255,255,255,.3);
-    box-shadow: 0 0 40px rgba(255,255,255,.15);
+#introScreen .intro-grid {
+    background-image: none !important;
+    opacity: 0 !important;
 }
-.intro-name span { color: #7AA0F0; }
-.intro-bar-fill  { background: linear-gradient(90deg, #4A7AE8, #7AA0F0); }
+#introScreen .intro-orb-1,
+#introScreen .intro-orb-2 {
+    background: radial-gradient(circle, rgba(0,122,255,.18) 0%, transparent 70%) !important;
+}
+/* Apple logo-style spinner */
+#introScreen .intro-spinner {
+    border-color: rgba(255,255,255,.15) !important;
+    border-top-color: #fff !important;
+}
+#introScreen .intro-name {
+    font-family: var(--font-display) !important;
+    font-weight: 300 !important;
+    letter-spacing: .04em !important;
+}
+#introScreen .intro-name span { color: #0A84FF !important; }
+#introScreen .intro-bar {
+    background: rgba(255,255,255,.12) !important;
+    border-radius: 3px !important;
+    height: 4px !important;
+}
+#introScreen .intro-bar-fill {
+    background: #0A84FF !important;
+    border-radius: 3px !important;
+}
 
 /* ══════════════════════════════════════════════════════════
-   AUTH SCREEN — FIX: text visible on white card
+   4. AUTH SCREEN — iOS sign-in sheet
 ══════════════════════════════════════════════════════════ */
 #authScreen {
-    background: linear-gradient(135deg, #0F2260 0%, #1A3A8F 60%, #2E5CC8 100%);
+    background: linear-gradient(160deg, #0A0A0F 0%, #0D1A2E 60%, #0D1E3A 100%) !important;
 }
-.auth-orb-1 { background: radial-gradient(circle, rgba(74,122,232,.4) 0%, transparent 70%); }
-.auth-orb-2 { background: radial-gradient(circle, rgba(46,92,200,.35) 0%, transparent 70%); }
-
-/* البطاقة: خلفية بيضاء صلبة */
+#authScreen .auth-orb-1 {
+    background: radial-gradient(circle, rgba(0,122,255,.25) 0%, transparent 70%) !important;
+}
+#authScreen .auth-orb-2 {
+    background: radial-gradient(circle, rgba(10,132,255,.18) 0%, transparent 70%) !important;
+}
 .auth-card {
-    background: #ffffff !important;
-    border: 1.5px solid rgba(26,58,143,.25) !important;
-    box-shadow: 0 32px 80px rgba(0,0,0,.35), 0 0 0 1px rgba(26,58,143,.08) !important;
+    background: rgba(255,255,255,0.96) !important;
+    border: 1px solid rgba(0,0,0,.08) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 32px 80px rgba(0,0,0,.4), 0 0 0 0.5px rgba(255,255,255,.08) !important;
+    backdrop-filter: blur(40px) !important;
 }
 [data-theme="dark"] .auth-card {
-    background: #0D1528 !important;
-    border: 1.5px solid rgba(74,122,232,.35) !important;
+    background: rgba(28,28,30,0.96) !important;
+    border: 1px solid rgba(255,255,255,.10) !important;
 }
+.auth-card h2 {
+    font-family: var(--font-display) !important;
+    color: #1C1C1E !important;
+    font-weight: 600 !important;
+    letter-spacing: -.02em !important;
+}
+[data-theme="dark"] .auth-card h2 { color: #FFFFFF !important; }
+.auth-card p { color: #6E6E73 !important; }
+[data-theme="dark"] .auth-card p { color: rgba(235,235,245,.6) !important; }
 
-/* عنوان وصف البطاقة */
-.auth-card h2 { color: #1A3A8F !important; }
-.auth-card p  { color: #555 !important; }
-[data-theme="dark"] .auth-card h2 { color: #7AA0F0 !important; }
-[data-theme="dark"] .auth-card p  { color: rgba(255,255,255,.55) !important; }
-
-/* أيقونة الحقل */
-.auth-field-icon { color: rgba(26,58,143,.5) !important; }
-.auth-field:focus-within .auth-field-icon { color: #1A3A8F !important; }
-[data-theme="dark"] .auth-field-icon { color: rgba(74,122,232,.6) !important; }
-[data-theme="dark"] .auth-field:focus-within .auth-field-icon { color: #7AA0F0 !important; }
-
-/* حقل الإدخال: نص داكن على خلفية فاتحة */
 .auth-input {
-    background: #F4F7FF !important;
-    border: 1.5px solid rgba(26,58,143,.2) !important;
-    border-radius: 14px !important;
-    color: #1A1A2E !important;
-    padding: .9rem 2.8rem .9rem 1.1rem !important;
-    font-family: 'Almarai', sans-serif;
-    font-size: .93rem;
-    outline: none;
-    transition: border-color .2s, box-shadow .2s, background .2s;
-    display: block;
-    width: 100%;
+    background: rgba(118,118,128,.12) !important;
+    border: 1px solid transparent !important;
+    border-radius: 12px !important;
+    color: #1C1C1E !important;
+    font-family: var(--font-system) !important;
+    font-size: .97rem !important;
+    transition: border-color .2s, box-shadow .2s !important;
 }
-.auth-input::placeholder { color: rgba(26,58,143,.35) !important; }
+[data-theme="dark"] .auth-input {
+    background: rgba(118,118,128,.24) !important;
+    color: #FFFFFF !important;
+}
 .auth-input:focus {
-    border-color: rgba(26,58,143,.55) !important;
-    box-shadow: 0 0 0 3px rgba(26,58,143,.1) !important;
+    border-color: #007AFF !important;
+    box-shadow: 0 0 0 3.5px rgba(0,122,255,.18) !important;
     background: #fff !important;
 }
-
-/* Dark mode inputs */
-[data-theme="dark"] .auth-input {
-    background: rgba(74,122,232,.08) !important;
-    border-color: rgba(74,122,232,.25) !important;
-    color: #E8EFFF !important;
-}
-[data-theme="dark"] .auth-input::placeholder { color: rgba(122,160,240,.4) !important; }
 [data-theme="dark"] .auth-input:focus {
-    background: rgba(74,122,232,.12) !important;
-    border-color: rgba(74,122,232,.5) !important;
+    background: rgba(58,58,60,.8) !important;
 }
+.auth-input::placeholder { color: rgba(60,60,67,.36) !important; }
+[data-theme="dark"] .auth-input::placeholder { color: rgba(235,235,245,.28) !important; }
 
-/* زر الدخول */
+.auth-field-icon { color: rgba(60,60,67,.4) !important; }
+.auth-field:focus-within .auth-field-icon { color: #007AFF !important; }
+
 .btn-auth {
-    background: linear-gradient(135deg, #1A3A8F, #2E5CC8) !important;
-    color: #ffffff !important;
-    box-shadow: 0 4px 20px rgba(26,58,143,.35) !important;
+    background: #007AFF !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 14px !important;
+    font-family: var(--font-system) !important;
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+    letter-spacing: -.01em !important;
+    box-shadow: 0 4px 16px rgba(0,122,255,.38) !important;
+    transition: all .18s ease !important;
 }
 .btn-auth:hover {
-    background: linear-gradient(135deg, #0F2260, #1A3A8F) !important;
-    transform: translateY(-1px);
-    box-shadow: 0 6px 24px rgba(26,58,143,.45) !important;
+    background: #0055D4 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 20px rgba(0,122,255,.45) !important;
 }
-
-/* gem */
-.auth-gem {
-    background: linear-gradient(145deg, #2E5CC8, #1A3A8F) !important;
-    border: none !important;
-    box-shadow: 0 0 0 8px rgba(26,58,143,.1), 0 8px 32px rgba(26,58,143,.3) !important;
-}
-
-/* ══════════════════════════════════════════════════════════
-   TOPBAR — FIX: white text/icons on dark blue background
-══════════════════════════════════════════════════════════ */
-.topbar {
-    background: linear-gradient(135deg, #0F2260 0%, #1A3A8F 60%, #2251C8 100%) !important;
-    border-bottom: 2px solid rgba(255,255,255,.1);
-    box-shadow: 0 2px 16px rgba(15,34,96,.4);
-}
-[data-theme="dark"] .topbar {
-    background: linear-gradient(135deg, #080F2A 0%, #0F2260 60%, #162880 100%) !important;
-}
-
-/* الشعار والاسم */
-.brand-gem {
-    background: rgba(255,255,255,.15) !important;
-    border: 2px solid rgba(255,255,255,.3) !important;
+.btn-auth:active {
+    transform: scale(.98) !important;
     box-shadow: none !important;
 }
-.brand-name { color: #ffffff !important; font-size: .95rem !important; }
-.brand-sub  { color: rgba(255,255,255,.65) !important; }
 
-/* الأيقونات */
+/* ══════════════════════════════════════════════════════════
+   5. TOPBAR — macOS titlebar / toolbar
+══════════════════════════════════════════════════════════ */
+.topbar {
+    background: var(--glass-sidebar) !important;
+    backdrop-filter: blur(28px) saturate(1.8) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.8) !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding: .55rem 1.25rem !important;
+    box-shadow: none !important;
+    height: 52px !important;
+    display: flex !important;
+    align-items: center !important;
+}
+[data-theme="dark"] .topbar {
+    background: rgba(28,28,30,.92) !important;
+    border-bottom-color: rgba(255,255,255,.08) !important;
+}
+
+.brand-gem {
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+.brand-name {
+    font-family: var(--font-display) !important;
+    font-weight: 600 !important;
+    font-size: .9rem !important;
+    color: var(--ink) !important;
+    letter-spacing: -.01em !important;
+}
+.brand-sub {
+    font-size: .64rem !important;
+    color: var(--ink-mid) !important;
+    font-weight: 400 !important;
+}
+
+/* macOS traffic-light style buttons */
 .btn-icon {
-    color: rgba(255,255,255,.8) !important;
-    border-color: rgba(255,255,255,.15) !important;
-    background: rgba(255,255,255,.05) !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 8px !important;
+    border: none !important;
+    background: transparent !important;
+    color: var(--ink-mid) !important;
+    font-size: .85rem !important;
+    transition: background .15s ease !important;
 }
 .btn-icon:hover {
-    color: #ffffff !important;
-    background: rgba(255,255,255,.15) !important;
-    border-color: rgba(255,255,255,.3) !important;
+    background: rgba(0,0,0,.07) !important;
+    color: var(--ink) !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+[data-theme="dark"] .btn-icon:hover {
+    background: rgba(255,255,255,.1) !important;
 }
 
-/* بيانات المستخدم */
 .user-pill {
-    background: rgba(255,255,255,.12) !important;
-    border-color: rgba(255,255,255,.2) !important;
+    background: rgba(0,0,0,.04) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 20px !important;
+    padding: .3rem .75rem .3rem .35rem !important;
 }
-.user-pill:hover { border-color: rgba(255,255,255,.35) !important; }
+[data-theme="dark"] .user-pill {
+    background: rgba(255,255,255,.06) !important;
+}
+.user-pill:hover { border-color: var(--border-strong) !important; }
 
 .user-avatar {
-    background: linear-gradient(145deg, #4A7AE8, #2E5CC8) !important;
-    color: #ffffff !important;
+    background: linear-gradient(145deg, #409CFF, #0055D4) !important;
+    box-shadow: none !important;
+    width: 26px !important; height: 26px !important;
+    font-size: .7rem !important;
 }
-.user-name { color: #ffffff !important; }
-.user-role { color: rgba(255,255,255,.7) !important; opacity: 1 !important; }
+.user-name { font-size: .8rem !important; font-weight: 500 !important; color: var(--ink) !important; }
+.user-role { color: #007AFF !important; font-size: .64rem !important; opacity: 1 !important; font-weight: 500 !important; }
 
 /* ══════════════════════════════════════════════════════════
-   NAVIGATION
+   6. DESKTOP NAV — macOS tab-bar style (≥ 992px)
 ══════════════════════════════════════════════════════════ */
-.desktop-nav-wrapper {
-    background: rgba(248,250,255,.97) !important;
-    border-bottom: 2px solid rgba(26,58,143,.12);
-}
-[data-theme="dark"] .desktop-nav-wrapper {
-    background: rgba(13,21,40,.97) !important;
-}
+@media (min-width: 992px) {
+    .desktop-nav-wrapper {
+        background: var(--glass-sidebar) !important;
+        backdrop-filter: blur(20px) saturate(1.6) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(1.6) !important;
+        border-bottom: 1px solid var(--border) !important;
+        padding: 0 1.25rem !important;
+    }
+    [data-theme="dark"] .desktop-nav-wrapper {
+        background: rgba(28,28,30,.90) !important;
+        border-bottom-color: rgba(255,255,255,.07) !important;
+    }
 
-.nav-btn.active {
-    color: #1A3A8F !important;
-    border-bottom-color: #1A3A8F !important;
-    background: rgba(26,58,143,.07) !important;
+    .desktop-nav-wrapper .nav-btn {
+        font-family: var(--font-system) !important;
+        font-size: .8rem !important;
+        font-weight: 500 !important;
+        color: var(--ink-mid) !important;
+        padding: .6rem 1rem !important;
+        border-radius: 0 !important;
+        border-bottom: 2px solid transparent !important;
+        letter-spacing: -.01em !important;
+        transition: color .15s, border-color .15s !important;
+        gap: 6px !important;
+    }
+    .desktop-nav-wrapper .nav-btn i {
+        font-size: .82rem !important;
+        opacity: .7 !important;
+    }
+    .desktop-nav-wrapper .nav-btn.active {
+        color: #007AFF !important;
+        border-bottom-color: #007AFF !important;
+        font-weight: 600 !important;
+    }
+    .desktop-nav-wrapper .nav-btn.active i { opacity: 1 !important; }
+    .desktop-nav-wrapper .nav-btn.active::before { display: none !important; }
+    .desktop-nav-wrapper .nav-btn:not(.active):hover {
+        color: var(--ink) !important;
+        background: rgba(0,0,0,.04) !important;
+    }
+    [data-theme="dark"] .desktop-nav-wrapper .nav-btn:not(.active):hover {
+        background: rgba(255,255,255,.06) !important;
+    }
 }
-[data-theme="dark"] .nav-btn.active {
-    color: #7AA0F0 !important;
-    border-bottom-color: #7AA0F0 !important;
-    background: rgba(74,122,232,.1) !important;
-}
-
-.bottom-nav .nav-btn.active { color: #1A3A8F !important; }
-[data-theme="dark"] .bottom-nav .nav-btn.active { color: #7AA0F0 !important; }
 
 /* ══════════════════════════════════════════════════════════
-   DARK MODE — FIX: RBAC banner and general contrast
+   7. iOS BOTTOM NAV (< 992px) — iOS 18 tab bar
 ══════════════════════════════════════════════════════════ */
+@media (max-width: 991px) {
+    .bottom-nav {
+        background: rgba(249,249,249,.92) !important;
+        backdrop-filter: blur(32px) saturate(1.8) !important;
+        -webkit-backdrop-filter: blur(32px) saturate(1.8) !important;
+        border-top: 0.5px solid rgba(0,0,0,.18) !important;
+        box-shadow: none !important;
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4px) !important;
+        height: calc(50px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    [data-theme="dark"] .bottom-nav {
+        background: rgba(22,22,23,.92) !important;
+        border-top-color: rgba(255,255,255,.14) !important;
+    }
 
-/* RBAC Security banner */
-[data-theme="dark"] .security-banner,
-[data-theme="dark"] [style*="rgba(26,58,107,.08)"] {
-    background: rgba(74,122,232,.1) !important;
-    border-color: rgba(74,122,232,.3) !important;
-}
-/* نص داخل الـ RBAC banner في الوضع الليلي */
-[data-theme="dark"] .security-banner *,
-[data-theme="dark"] [style*="rgba(26,58,107,.08)"] * {
-    color: #C8D8FF !important;
-}
-[data-theme="dark"] [style*="rgba(26,58,107,.08)"] .fas {
-    color: #7AA0F0 !important;
-}
+    .bottom-nav .nav-btn {
+        font-family: var(--font-system) !important;
+        font-size: .6rem !important;
+        font-weight: 400 !important;
+        color: rgba(60,60,67,.5) !important;
+        gap: 2px !important;
+        padding: .4rem .15rem !important;
+        transition: none !important;
+    }
+    [data-theme="dark"] .bottom-nav .nav-btn {
+        color: rgba(235,235,245,.45) !important;
+    }
+    .bottom-nav .nav-btn i {
+        font-size: 1.3rem !important;
+        line-height: 1 !important;
+        transition: transform .12s cubic-bezier(0.34,1.56,0.64,1) !important;
+    }
+    .bottom-nav .nav-btn.active {
+        color: #007AFF !important;
+        font-weight: 500 !important;
+    }
+    [data-theme="dark"] .bottom-nav .nav-btn.active { color: #0A84FF !important; }
+    .bottom-nav .nav-btn.active i { transform: scale(1.08) !important; }
+    .bottom-nav .nav-btn.active::before { display: none !important; }
 
-/* نص عام في الوضع الليلي */
-[data-theme="dark"] { color-scheme: dark; }
-[data-theme="dark"] body { color: #E0E8FF; }
+    .main-content {
+        padding: 1rem .85rem !important;
+        padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 1.5rem) !important;
+    }
+}
 
 /* ══════════════════════════════════════════════════════════
-   BUTTONS & COMPONENTS
+   8. MAIN CONTENT & PAGE HEADERS
 ══════════════════════════════════════════════════════════ */
-.btn-j.btn-gold {
-    background: linear-gradient(135deg, #1A3A8F, #2E5CC8) !important;
+.main-content { background: transparent !important; }
+
+.page-title {
+    font-family: var(--font-display) !important;
+    font-size: 1.55rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -.025em !important;
+    color: var(--ink) !important;
+}
+.page-subtitle {
+    color: var(--ink-mid) !important;
+    font-size: .8rem !important;
+    font-weight: 400 !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   9. CARDS — Apple card style
+══════════════════════════════════════════════════════════ */
+.card-j {
+    background: var(--glass) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-mac) !important;
+    box-shadow: var(--shadow-sm) !important;
+    backdrop-filter: blur(12px) !important;
+}
+[data-theme="dark"] .card-j {
+    background: rgba(44,44,46,.8) !important;
+    border-color: rgba(255,255,255,.09) !important;
+    backdrop-filter: blur(20px) !important;
+}
+.card-j::before { display: none !important; }
+.card-j:hover {
+    box-shadow: var(--shadow-md) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* ── KPI Cards — iOS widget aesthetic ─── */
+.kpi-card {
+    background: var(--glass) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-ios) !important;
+    box-shadow: var(--shadow-sm) !important;
+    padding: 1.1rem 1.25rem !important;
+    backdrop-filter: blur(16px) !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+[data-theme="dark"] .kpi-card {
+    background: rgba(44,44,46,.85) !important;
+    border-color: rgba(255,255,255,.08) !important;
+}
+.kpi-card::before {
+    content: '' !important;
+    position: absolute !important; top: 0 !important; left: 0 !important;
+    right: 0 !important; height: 2px !important;
+    background: transparent !important;
+    display: none !important;
+}
+.kpi-card:hover { transform: translateY(-2px) !important; box-shadow: var(--shadow-md) !important; }
+
+.kpi-label {
+    font-family: var(--font-system) !important;
+    font-size: .72rem !important;
+    font-weight: 500 !important;
+    letter-spacing: .02em !important;
+    text-transform: uppercase !important;
+    color: var(--ink-mid) !important;
+    margin-bottom: .35rem !important;
+}
+.kpi-value {
+    font-family: var(--font-display) !important;
+    font-size: 1.7rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -.03em !important;
+    color: var(--ink) !important;
+}
+.kpi-icon {
+    width: 38px !important; height: 38px !important;
+    border-radius: 10px !important;
+    font-size: .95rem !important;
+    box-shadow: none !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   10. BUTTONS — iOS/macOS button styles
+══════════════════════════════════════════════════════════ */
+.btn-j {
+    font-family: var(--font-system) !important;
+    font-weight: 500 !important;
+    letter-spacing: -.01em !important;
+    border-radius: 10px !important;
+    transition: all .15s ease !important;
+    border: none !important;
+}
+.btn-j:active { transform: scale(.97) !important; }
+
+.btn-gold {
+    background: #007AFF !important;
     color: #fff !important;
-    border-color: transparent !important;
+    box-shadow: 0 2px 8px rgba(0,122,255,.32) !important;
 }
-.btn-j.btn-gold:hover {
-    background: linear-gradient(135deg, #0F2260, #1A3A8F) !important;
+.btn-gold:hover {
+    background: #0064D9 !important;
+    box-shadow: 0 4px 14px rgba(0,122,255,.4) !important;
+    transform: translateY(-1px) !important;
 }
+[data-theme="dark"] .btn-gold { background: #0A84FF !important; }
 
-.kpi-gold {
-    background: linear-gradient(135deg, #1A3A8F, #2E5CC8) !important;
+.btn-ruby {
+    background: #FF3B30 !important;
+    color: #fff !important;
+    box-shadow: 0 2px 8px rgba(255,59,48,.28) !important;
 }
+.btn-ruby:hover { background: #D70015 !important; transform: translateY(-1px) !important; }
+[data-theme="dark"] .btn-ruby { background: #FF453A !important; }
 
-.item-card { border-top-color: #1A3A8F !important; }
-
-.color-picker-popup { border-color: #1A3A8F !important; }
-
-/* ══════════════════════════════════════════════════════════
-   FORMS
-══════════════════════════════════════════════════════════ */
-.form-control-j:focus {
-    border-color: #1A3A8F !important;
-    box-shadow: 0 0 0 3px rgba(26,58,143,.12) !important;
+.btn-ghost {
+    background: rgba(118,118,128,.12) !important;
+    color: var(--ink) !important;
+    border: none !important;
 }
-
-.search-bar:focus-within {
-    border-color: rgba(26,58,143,.4) !important;
-    box-shadow: 0 0 0 3px rgba(26,58,143,.08) !important;
-}
-
-/* ══════════════════════════════════════════════════════════
-   MISC
-══════════════════════════════════════════════════════════ */
-::-webkit-scrollbar-thumb       { background: rgba(26,58,143,.3); }
-::-webkit-scrollbar-thumb:hover { background: rgba(26,58,143,.5); }
-
-.page-title::after { background: linear-gradient(90deg, #1A3A8F, #2E5CC8) !important; }
-
-#wiz-progress { background: linear-gradient(90deg, #1A3A8F, #2E5CC8) !important; }
-
-.toast-j.success { background: linear-gradient(135deg, #1A3A8F, #2E5CC8) !important; }
-
-.badge-j.badge-new { background: rgba(26,58,143,.12) !important; color: #1A3A8F !important; }
-[data-theme="dark"] .badge-j.badge-new { background: rgba(74,122,232,.2) !important; color: #7AA0F0 !important; }
-
-#customColorModal .modal-title i { color: #1A3A8F !important; }
-
-/* ══════════════════════════════════════════════════════════
-   ANIMATIONS
-══════════════════════════════════════════════════════════ */
-@keyframes pulse {
-    0%, 100% { transform: scale(1);    box-shadow: 0 0 20px rgba(255,255,255,.2); }
-    50%       { transform: scale(1.05); box-shadow: 0 0 40px rgba(255,255,255,.4); }
+.btn-ghost:hover { background: rgba(118,118,128,.20) !important; }
+[data-theme="dark"] .btn-ghost {
+    background: rgba(118,118,128,.22) !important;
+    color: #fff !important;
 }
 
 /* ══════════════════════════════════════════════════════════
-   MOBILE FIXES — إصلاحات الموبايل الشاملة
-   (max-width: 600px)
+   11. FORMS — iOS input fields
 ══════════════════════════════════════════════════════════ */
-@media (max-width: 600px) {
+.form-control-j, .select-j, input[class*="form"], textarea[class*="form"] {
+    font-family: var(--font-system) !important;
+    background: rgba(118,118,128,.12) !important;
+    border: 1.5px solid transparent !important;
+    border-radius: 10px !important;
+    color: var(--ink) !important;
+    font-size: .9rem !important;
+    transition: border-color .18s, box-shadow .18s, background .18s !important;
+}
+[data-theme="dark"] .form-control-j,
+[data-theme="dark"] .select-j {
+    background: rgba(118,118,128,.24) !important;
+    color: #fff !important;
+}
+.form-control-j:focus, .select-j:focus, input[class*="form"]:focus {
+    border-color: #007AFF !important;
+    box-shadow: 0 0 0 3.5px rgba(0,122,255,.18) !important;
+    background: rgba(255,255,255,.98) !important;
+    outline: none !important;
+}
+[data-theme="dark"] .form-control-j:focus,
+[data-theme="dark"] .select-j:focus {
+    background: rgba(58,58,60,.95) !important;
+}
 
-    /* ── 1. حقل رقم الموبايل في الويزرد ─────────────────── */
-    /* المربع "07" والحقل بجانبه — نكبر كليهم */
-    #wiz-body [dir="ltr"] > span {
-        padding: 1rem 1.1rem !important;
-        font-size: 1.25rem !important;
-        border-radius: 12px !important;
-        min-width: 58px;
-    }
-    #wiz_mobile {
-        font-size: 1.4rem !important;
-        padding: 1rem 1rem !important;
-        letter-spacing: 3px;
-        min-height: 56px;
-    }
+/* ── Form Labels ─── */
+.form-label-j {
+    font-family: var(--font-system) !important;
+    font-size: .75rem !important;
+    font-weight: 500 !important;
+    color: var(--ink-mid) !important;
+    letter-spacing: .01em !important;
+}
 
-    /* ── 2. الويزرد العام ────────────────────────────────── */
-    #wiz-shell {
-        padding: .5rem !important;
-        min-height: 100dvh;
-        justify-content: flex-start !important;
-        padding-top: 1rem !important;
-    }
-    /* شريط التقدم */
-    #wiz-shell > div:first-child {
-        margin-bottom: 1rem !important;
-        padding: 0 .25rem;
-    }
-    /* الكارت الرئيسي */
-    #wiz-card {
-        padding: 1.5rem 1.25rem !important;
-        min-height: 0 !important;
-        border-radius: 16px !important;
-    }
-    /* العنوان الكبير في كل خطوة */
-    #wiz-body > div[style*="font-size:1.5rem"],
-    #wiz-body > div[style*="font-size: 1.5rem"] {
-        font-size: 1.2rem !important;
-        margin-bottom: 1rem !important;
-    }
-    /* حقول الإدخال الكبيرة */
-    #wiz_custName, #wiz_addr, #wiz_price {
-        font-size: 1.1rem !important;
-        padding: .9rem 1rem !important;
-    }
-    /* أزرار التالي/تراجع */
-    #wiz-nav { margin-top: 1.25rem !important; }
-    #wiz-nav .btn-j { padding: .85rem 1.2rem !important; font-size: .95rem !important; }
+/* ══════════════════════════════════════════════════════════
+   12. TABLE — macOS Numbers / data table style
+══════════════════════════════════════════════════════════ */
+.table-j {
+    font-family: var(--font-system) !important;
+    font-size: .84rem !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+}
+.table-j thead th {
+    background: rgba(118,118,128,.08) !important;
+    color: var(--ink-mid) !important;
+    font-weight: 600 !important;
+    font-size: .72rem !important;
+    letter-spacing: .03em !important;
+    text-transform: uppercase !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding: .65rem .85rem !important;
+}
+[data-theme="dark"] .table-j thead th {
+    background: rgba(255,255,255,.04) !important;
+    border-bottom-color: rgba(255,255,255,.09) !important;
+}
+.table-j tbody tr {
+    border-bottom: 0.5px solid var(--border-2) !important;
+    transition: background .12s !important;
+}
+.table-j tbody tr:hover { background: rgba(0,122,255,.04) !important; }
+[data-theme="dark"] .table-j tbody tr:hover {
+    background: rgba(0,122,255,.08) !important;
+}
+.table-j tbody td {
+    padding: .7rem .85rem !important;
+    vertical-align: middle !important;
+    color: var(--ink) !important;
+    border: none !important;
+}
+.table-j .table-wrapper {
+    border-radius: var(--radius-mac) !important;
+    overflow: hidden !important;
+    border: 1px solid var(--border) !important;
+    background: var(--glass) !important;
+}
 
-    /* ── 3. خطوة المنتجات — item rows ───────────────────── */
-    .item-row-card { padding: .65rem .75rem !important; margin-bottom: .5rem !important; }
-    .item-row-fields {
-        grid-template-columns: 1fr 1fr !important;
-        gap: .5rem !important;
-    }
-    .item-row-product { grid-column: span 2 !important; }
-    .item-row-color   { grid-column: span 1; }
-    .item-row-size    { grid-column: span 1; }
-    .item-row-qty     { grid-column: span 2; }
+/* ══════════════════════════════════════════════════════════
+   13. BADGES / STATUS PILLS — iOS-style chips
+══════════════════════════════════════════════════════════ */
+.badge-j, [class*="status-badge"], .status-chip {
+    font-family: var(--font-system) !important;
+    font-size: .7rem !important;
+    font-weight: 600 !important;
+    border-radius: 6px !important;
+    padding: .22rem .6rem !important;
+    letter-spacing: .01em !important;
+    border: none !important;
+}
 
-    /* حقل اللون — أكبر للضغط */
-    .ir-color { min-height: 42px !important; font-size: .88rem !important; }
-    #ir_color_btn_0, [id^="ir_color_btn_"] {
-        min-width: 42px !important; min-height: 42px !important;
-        padding: .4rem .6rem !important;
-    }
+/* ══════════════════════════════════════════════════════════
+   14. KANBAN / ORDER BOARD
+══════════════════════════════════════════════════════════ */
+.kanban-section {
+    background: var(--glass) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-mac) !important;
+    box-shadow: var(--shadow-xs) !important;
+    backdrop-filter: blur(10px) !important;
+}
+[data-theme="dark"] .kanban-section {
+    background: rgba(44,44,46,.72) !important;
+    border-color: rgba(255,255,255,.08) !important;
+}
+.kanban-header { padding: .85rem 1.1rem !important; }
+.kanban-header:hover { background: rgba(0,0,0,.025) !important; }
+[data-theme="dark"] .kanban-header:hover { background: rgba(255,255,255,.03) !important; }
+.kanban-title {
+    font-family: var(--font-system) !important;
+    font-weight: 600 !important;
+    font-size: .92rem !important;
+    letter-spacing: -.01em !important;
+}
+.kanban-count {
+    border-radius: 5px !important;
+    font-size: .7rem !important;
+}
+.kanban-body { background: rgba(0,0,0,.02) !important; }
+[data-theme="dark"] .kanban-body { background: rgba(0,0,0,.12) !important; }
 
-    /* Qty في الموبايل */
-    .item-row-qty .qty-control { justify-content: center; gap: .5rem !important; }
-    .item-row-qty .qty-btn { width: 38px !important; height: 42px !important; }
-    .item-row-qty .qty-input { width: 56px !important; font-size: 1rem !important; }
+.order-card-j {
+    background: var(--glass) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    box-shadow: var(--shadow-xs) !important;
+    border-top: none !important;
+    padding: .9rem !important;
+    transition: all .18s ease !important;
+}
+.order-card-j::before { display: none !important; }
+[data-theme="dark"] .order-card-j {
+    background: rgba(58,58,60,.75) !important;
+    border-color: rgba(255,255,255,.07) !important;
+}
+.order-card-j:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: var(--shadow-md) !important;
+    border-color: rgba(0,122,255,.25) !important;
+}
+/* Color-coded left border instead of top border */
+.order-card-j.status-new       { border-left: 3px solid var(--status-new) !important; }
+.order-card-j.status-process   { border-left: 3px solid var(--status-process) !important; }
+.order-card-j.status-done      { border-left: 3px solid var(--status-done) !important; }
+.order-card-j.status-delivered { border-left: 3px solid var(--status-delivered) !important; }
+.order-card-j.status-postponed { border-left: 3px solid var(--status-postponed) !important; }
+.order-card-j.status-canceled  { border-left: 3px solid var(--status-canceled) !important; }
+.order-card-j.status-stored    { border-left: 3px solid var(--status-stored) !important; }
 
-    /* إضافة منتج آخر */
-    .add-item-row-btn { padding: .75rem 1rem !important; font-size: .9rem !important; }
+.order-card-customer {
+    font-family: var(--font-system) !important;
+    font-weight: 600 !important;
+    font-size: .93rem !important;
+    letter-spacing: -.01em !important;
+}
+.order-card-meta {
+    font-size: .75rem !important;
+    color: var(--ink-mid) !important;
+}
 
-    /* ── 4. Color Picker Popup — ملء أعرض على الشاشة الصغيرة */
-    .color-picker-popup {
-        max-width: calc(100vw - 16px) !important;
-        left: 8px !important;
-        right: 8px !important;
-        width: auto !important;
-        display: grid !important;
-        grid-template-columns: repeat(7, 1fr) !important;
-    }
-    .color-picker-popup > div {
-        width: 100% !important;
-        height: 36px !important;
-        border-radius: 6px !important;
-    }
+/* ══════════════════════════════════════════════════════════
+   15. WAREHOUSE ITEM CARDS — iOS widget tiles
+══════════════════════════════════════════════════════════ */
+.item-card {
+    background: var(--glass) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-mac) !important;
+    box-shadow: var(--shadow-xs) !important;
+    transition: all .18s ease !important;
+    backdrop-filter: blur(10px) !important;
+}
+[data-theme="dark"] .item-card {
+    background: rgba(44,44,46,.8) !important;
+    border-color: rgba(255,255,255,.08) !important;
+}
+.item-card:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: var(--shadow-md) !important;
+}
 
-    /* ── 5. Topbar على الموبايل ──────────────────────────── */
-    .topbar { padding: .45rem .85rem !important; }
-    .brand-name { font-size: .82rem !important; }
-    .brand-sub  { display: none; }  /* إخفاء السطر الثاني لتوفير مساحة */
-    .brand-gem  { width: 34px !important; height: 34px !important; }
-    .user-pill  { padding: .25rem .6rem .25rem .3rem !important; }
-    .user-name  { font-size: .76rem !important; }
-    .user-role  { display: none; }  /* إخفاء الدور لتوفير مساحة */
-    .btn-icon   { width: 34px !important; height: 34px !important; }
+/* ══════════════════════════════════════════════════════════
+   16. MODALS — iOS action sheets / macOS panels
+══════════════════════════════════════════════════════════ */
+.modal-overlay {
+    background: rgba(0,0,0,.35) !important;
+    backdrop-filter: blur(4px) !important;
+}
+.modal-sheet {
+    background: var(--glass) !important;
+    border-radius: var(--radius-ios) var(--radius-ios) 0 0 !important;
+    border: 1px solid var(--border) !important;
+    border-bottom: none !important;
+    box-shadow: 0 -8px 40px rgba(0,0,0,.14) !important;
+    backdrop-filter: blur(40px) saturate(1.8) !important;
+}
+[data-theme="dark"] .modal-sheet {
+    background: rgba(28,28,30,.96) !important;
+    border-color: rgba(255,255,255,.10) !important;
+}
+.modal-handle {
+    width: 36px !important;
+    background: rgba(60,60,67,.22) !important;
+    height: 5px !important;
+    border-radius: 3px !important;
+}
+[data-theme="dark"] .modal-handle { background: rgba(255,255,255,.25) !important; }
+.modal-title {
+    font-family: var(--font-display) !important;
+    font-weight: 600 !important;
+    letter-spacing: -.015em !important;
+    color: var(--ink) !important;
+}
 
-    /* ── 6. النصوص العامة في الصفحات ────────────────────── */
-    .page-title    { font-size: 1.3rem !important; }
-    .page-subtitle { font-size: .78rem !important; }
-    .page-header   { margin-bottom: 1.1rem !important; }
-
-    /* ── 7. القائمة السفلية — أيقونات أوضح ─────────────── */
-    .bottom-nav .nav-btn { padding: .5rem .15rem !important; font-size: .58rem !important; }
-    .bottom-nav .nav-btn i { font-size: 1.05rem !important; }
-
-    /* ── 8. Modal sheets — ملء الشاشة تقريباً ──────────── */
+/* ── macOS-style dialog for desktop ─── */
+@media (min-width: 992px) {
     .modal-sheet {
-        max-height: 92dvh !important;
-        border-radius: 20px 20px 0 0 !important;
-        padding: 1.25rem 1.25rem 1.5rem !important;
+        border-radius: var(--radius-mac) !important;
+        border: 1px solid var(--border) !important;
+        box-shadow: var(--shadow-lg) !important;
     }
+}
 
-    /* ── 9. خطوة التأكيد (Confirm) ─────────────────────── */
-    .wiz-summary-row { padding: .35rem 0 !important; }
-    .wiz-summary-label { font-size: .74rem !important; min-width: 70px !important; }
-    .wiz-summary-val   { font-size: .84rem !important; }
+/* ══════════════════════════════════════════════════════════
+   17. TOAST — iOS notification banner
+══════════════════════════════════════════════════════════ */
+.toast-j {
+    font-family: var(--font-system) !important;
+    font-weight: 500 !important;
+    border-radius: 14px !important;
+    backdrop-filter: blur(32px) saturate(1.8) !important;
+    border: 1px solid rgba(255,255,255,.18) !important;
+    box-shadow: 0 8px 28px rgba(0,0,0,.20) !important;
+    font-size: .88rem !important;
+}
 
-    /* ── 10. form-control عام — أكبر للمس ───────────────── */
-    .form-control-j { min-height: 44px; font-size: .9rem !important; }
-    .select-j       { min-height: 44px !important; }
-    .btn-j          { min-height: 40px; }
-    .btn-xs-j       { min-height: 34px !important; }
+/* ══════════════════════════════════════════════════════════
+   18. DROPDOWN — macOS context menu
+══════════════════════════════════════════════════════════ */
+.dropdown-j .dropdown-menu-j,
+.dropdown-menu {
+    background: var(--glass) !important;
+    backdrop-filter: blur(28px) saturate(1.8) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,.18) !important;
+    font-family: var(--font-system) !important;
+    font-size: .88rem !important;
+    padding: 6px !important;
+}
+[data-theme="dark"] .dropdown-j .dropdown-menu-j {
+    background: rgba(44,44,46,.96) !important;
+}
+.dropdown-j .dropdown-item-j,
+.dropdown-item {
+    border-radius: 8px !important;
+    font-family: var(--font-system) !important;
+    padding: .5rem .75rem !important;
+    transition: background .1s !important;
+}
+.dropdown-j .dropdown-item-j:hover,
+.dropdown-item:hover {
+    background: rgba(0,122,255,.10) !important;
+    color: #007AFF !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   19. WIZARD / ENTRY FORM — iOS step card
+══════════════════════════════════════════════════════════ */
+#wiz-card {
+    background: var(--glass) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-ios) !important;
+    box-shadow: var(--shadow-md) !important;
+    backdrop-filter: blur(20px) !important;
+}
+[data-theme="dark"] #wiz-card {
+    background: rgba(44,44,46,.88) !important;
+    border-color: rgba(255,255,255,.10) !important;
+}
+#wiz-progress {
+    background: #007AFF !important;
+    border-radius: 3px !important;
+}
+[data-theme="dark"] #wiz-progress { background: #0A84FF !important; }
+
+/* ══════════════════════════════════════════════════════════
+   20. BULK PANEL — compact macOS toolbar
+══════════════════════════════════════════════════════════ */
+.bulk-panel {
+    background: rgba(0,122,255,.09) !important;
+    border: 1.5px solid rgba(0,122,255,.22) !important;
+    border-radius: 12px !important;
+    backdrop-filter: blur(12px) !important;
+}
+[data-theme="dark"] .bulk-panel {
+    background: rgba(10,132,255,.12) !important;
+    border-color: rgba(10,132,255,.28) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   21. SKELETON — SF shimmer
+══════════════════════════════════════════════════════════ */
+.skeleton {
+    background: linear-gradient(90deg,
+        rgba(118,118,128,.10) 25%,
+        rgba(118,118,128,.18) 50%,
+        rgba(118,118,128,.10) 75%) !important;
+    background-size: 200% !important;
+    animation: sfShimmer 1.4s ease-in-out infinite !important;
+    border-radius: 8px !important;
+}
+@keyframes sfShimmer {
+    0%   { background-position: 200% center; }
+    100% { background-position: -200% center; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   22. SCROLLBAR — macOS thin overlay style
+══════════════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 6px !important; height: 6px !important; }
+::-webkit-scrollbar-track { background: transparent !important; }
+::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,.18) !important;
+    border-radius: 10px !important;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,.18) !important;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0,0,0,.28) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   23. SELECTION — iOS blue highlight
+══════════════════════════════════════════════════════════ */
+::selection { background: rgba(0,122,255,.25) !important; color: inherit !important; }
+
+/* ══════════════════════════════════════════════════════════
+   24. FOCUS RINGS — macOS keyboard accessibility
+══════════════════════════════════════════════════════════ */
+:focus-visible {
+    outline: 3px solid rgba(0,122,255,.65) !important;
+    outline-offset: 2px !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   25. CHECKBOXES — iOS toggle style
+══════════════════════════════════════════════════════════ */
+.check-j {
+    accent-color: #007AFF !important;
+    border-radius: 5px !important;
+    width: 17px !important; height: 17px !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   26. COLOR PICKER — iOS color tile
+══════════════════════════════════════════════════════════ */
+.color-tile {
+    border-radius: 10px !important;
+    border: 2px solid transparent !important;
+    box-shadow: var(--shadow-xs) !important;
+    transition: transform .12s !important;
+}
+.color-tile:hover { transform: scale(1.08) !important; }
+.color-tile.selected {
+    border-color: #007AFF !important;
+    box-shadow: 0 0 0 3px rgba(0,122,255,.25) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   27. iOS TOPBAR — mobile header tweak
+══════════════════════════════════════════════════════════ */
+@media (max-width: 991px) {
+    .topbar {
+        height: 48px !important;
+        padding: .4rem 1rem !important;
+        backdrop-filter: blur(24px) saturate(1.6) !important;
+    }
+    .brand-name { font-size: .85rem !important; }
+    .brand-sub { display: none !important; }
+
+    .page-title { font-size: 1.35rem !important; }
+    .page-header { margin-bottom: 1.25rem !important; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   28. CHART CONTAINERS — rounded iOS widget style
+══════════════════════════════════════════════════════════ */
+.chart-box {
+    background: var(--glass) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-mac) !important;
+    box-shadow: var(--shadow-xs) !important;
+    backdrop-filter: blur(10px) !important;
+    padding: 1.1rem !important;
+}
+[data-theme="dark"] .chart-box {
+    background: rgba(44,44,46,.75) !important;
+    border-color: rgba(255,255,255,.07) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   29. SECTION HEADER CARDS (dashboard chart labels)
+══════════════════════════════════════════════════════════ */
+[style*="font-weight:800"][style*="color:var(--ink-mid)"],
+.card-j [style*="font-weight:800"] {
+    font-family: var(--font-system) !important;
+    font-weight: 600 !important;
+    font-size: .75rem !important;
+    letter-spacing: .03em !important;
+    text-transform: uppercase !important;
+    color: var(--ink-mid) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   30. DARK MODE BODY BACKGROUND — deep iOS black
+══════════════════════════════════════════════════════════ */
+[data-theme="dark"] body {
+    background: #000 !important;
+}
+[data-theme="dark"] body::before { display: none !important; }
+[data-theme="dark"] body::after {
+    background:
+        radial-gradient(ellipse 70% 35% at 50% 0%, rgba(0,122,255,.06) 0%, transparent 60%);
+}
+
+/* ══════════════════════════════════════════════════════════
+   31. STOCK ALERT — iOS-style notification row
+══════════════════════════════════════════════════════════ */
+.stock-alert-row {
+    border-radius: 10px !important;
+    border: none !important;
+    background: rgba(255,59,48,.07) !important;
+    padding: .55rem .85rem !important;
+    font-family: var(--font-system) !important;
+}
+[data-theme="dark"] .stock-alert-row {
+    background: rgba(255,69,58,.10) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   32. SYNC OVERLAY — Apple-style loading screen
+══════════════════════════════════════════════════════════ */
+#syncOverlay {
+    background: rgba(0,0,0,.5) !important;
+    backdrop-filter: blur(8px) saturate(1.6) !important;
+}
+#syncOverlay > div:first-child {
+    border-color: rgba(255,255,255,.15) !important;
+    border-top-color: #0A84FF !important;
+}
+#syncOverlay > div:last-child {
+    color: #fff !important;
+    font-family: var(--font-system) !important;
+    font-weight: 400 !important;
+    font-size: .9rem !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   33. RETURN CARDS — matched styling
+══════════════════════════════════════════════════════════ */
+.return-card {
+    background: var(--glass) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-mac) !important;
+    box-shadow: var(--shadow-xs) !important;
+    backdrop-filter: blur(10px) !important;
+}
+[data-theme="dark"] .return-card {
+    background: rgba(44,44,46,.78) !important;
+    border-color: rgba(255,255,255,.08) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   34. WAYBILL PRINT — keep clean
+══════════════════════════════════════════════════════════ */
+@media print {
+    .topbar, .desktop-nav-wrapper, .bottom-nav { display: none !important; }
+    body { background: #fff !important; color: #000 !important; }
+    .card-j, .modal-sheet { box-shadow: none !important; border: 1px solid #ddd !important; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   35. MISC ANIMATIONS — Apple spring
+══════════════════════════════════════════════════════════ */
+.page.active {
+    animation: sfPageIn .28s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+@keyframes sfPageIn {
+    from { opacity: 0; transform: translateY(8px) scale(.99); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Haptic-feel button press */
+.btn-j:active, .nav-btn:active, .order-card-j:active {
+    transition: transform .08s ease, box-shadow .08s ease !important;
 }
