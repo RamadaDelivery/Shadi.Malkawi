@@ -169,6 +169,13 @@
     color: #e74c3c;
   }
   .btn-danger:hover { background: rgba(231,76,60,.2); }
+  
+  .btn-magic {
+    background: rgba(201, 168, 76, 0.15);
+    border: 1px solid var(--gold);
+    color: var(--gold-light);
+  }
+  .btn-magic:hover { background: rgba(201, 168, 76, 0.25); transform: translateY(-1px); }
 
   .btn-row {
     display: flex;
@@ -264,6 +271,7 @@
     border: 1px solid rgba(231,76,60,.2);
     border-radius: 8px;
     padding: 10px 14px;
+    font-size: .8 gamble;
     font-size: .8rem;
     color: #e74c3c;
     margin-top: 10px;
@@ -373,6 +381,9 @@
   <div class="btn-row">
     <button class="btn btn-gold" id="saveBtn" onclick="saveAll()" disabled>
       💾 حفظ التعديلات (<span id="saveBtnCount">0</span>)
+    </button>
+    <button class="btn btn-magic" onclick="generateUniqueBarcodesForConflicts()">
+      ⚙️ توليد باركودات عشوائية للتعارضات
     </button>
     <button class="btn btn-outline" onclick="resetAll()">↩ إلغاء كل التعديلات</button>
     <button class="btn btn-outline" onclick="loadData()">🔄 تحديث من Firebase</button>
@@ -633,6 +644,50 @@ window.onBcKeydown = (e, i) => {
       const next = document.querySelector(`input[data-row="${nextI}"]`);
       if (next) next.focus();
     }
+  }
+};
+
+// ── Generate Unique Barcodes for Conflicts ─────────────────────
+window.generateUniqueBarcodesForConflicts = () => {
+  // Build an active set of all current barcodes to guarantee absolute uniqueness
+  const activeBarcodes = new Set();
+  for (const r of window._rows) {
+    const b = r.newBarcode.trim();
+    if (b) activeBarcodes.add(b);
+  }
+
+  // Count occurrences to identify conflicts
+  const bcCount = {};
+  for (const r of window._rows) {
+    const b = r.newBarcode.trim();
+    if (b) bcCount[b] = (bcCount[b] || 0) + 1;
+  }
+
+  let generatedCount = 0;
+
+  // Helper function to generate an 8-digit random barcode
+  const produceRandomBC = () => Math.floor(10000000 + Math.random() * 90000000).toString();
+
+  for (const r of window._rows) {
+    const currentBc = r.newBarcode.trim();
+    
+    // Condition: barcode is empty OR it is duplicated (has conflict)
+    if (!currentBc || bcCount[currentBc] > 1) {
+      let uniqueBc = produceRandomBC();
+      while (activeBarcodes.has(uniqueBc)) {
+        uniqueBc = produceRandomBC();
+      }
+      r.newBarcode = uniqueBc;
+      activeBarcodes.add(uniqueBc);
+      generatedCount++;
+    }
+  }
+
+  if (generatedCount > 0) {
+    renderTable();
+    toast(`✅ تم توليد ${generatedCount} باركود فريد بنجاح لحل التعارضات!`, 'success');
+  } else {
+    toast('لا توجد تعارضات أو خانات فارغة لتوليد باركودات لها.', 'info');
   }
 };
 
