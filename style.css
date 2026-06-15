@@ -1504,3 +1504,96 @@ tr.usr-disabled { opacity: .5; }
 #customColorModal input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 8px; }
 #customColorModal input[type="color"]::-webkit-color-swatch { border: none; border-radius: 8px; }
 #customColorModal input[type="color"]::-moz-color-swatch { border: none; border-radius: 8px; }
+
+
+/* ============ FLOATING QUICK ACTIONS + SMART NAV ============ */
+.delivery-fab,
+.nav-reveal-pill {
+    position: fixed;
+    border: 1px solid rgba(255,255,255,.28);
+    font-family: 'Almarai', sans-serif;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 850;
+    -webkit-tap-highlight-color: transparent;
+}
+.delivery-fab {
+    right: clamp(1rem, 3vw, 1.75rem);
+    bottom: calc(1.1rem + env(safe-area-inset-bottom, 0px));
+    gap: .65rem;
+    min-width: 58px;
+    min-height: 58px;
+    padding: .72rem .9rem .72rem 1.05rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--gold-light), var(--gold) 52%, var(--gold-dark));
+    color: #141827;
+    box-shadow: 0 16px 38px rgba(201,168,76,.34), 0 5px 14px rgba(0,0,0,.18);
+    font-weight: 900;
+    letter-spacing: -.01em;
+    transform: translateY(130%) scale(.92);
+    opacity: 0;
+    transition: transform .28s var(--ease-out), opacity .22s, box-shadow .22s, bottom .24s, filter .22s;
+}
+.delivery-fab.is-visible { display: inline-flex; transform: translateY(0) scale(1); opacity: 1; }
+.delivery-fab:hover { filter: brightness(1.04); box-shadow: 0 20px 46px rgba(201,168,76,.42), 0 8px 20px rgba(0,0,0,.22); }
+.delivery-fab:active { transform: translateY(1px) scale(.98); }
+.delivery-fab__icon {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: rgba(20,24,39,.12);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+}
+.delivery-fab__label { font-size: .88rem; white-space: nowrap; }
+.nav-reveal-pill {
+    left: 50%;
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    transform: translate(-50%, 120%);
+    gap: .45rem;
+    padding: .52rem .85rem;
+    border-radius: 999px;
+    background: rgba(19,24,38,.82);
+    color: #fff;
+    box-shadow: 0 12px 30px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.12);
+    backdrop-filter: blur(18px) saturate(1.25);
+    font-size: .78rem;
+    font-weight: 800;
+    opacity: 0;
+    transition: transform .26s var(--ease-out), opacity .2s, bottom .24s;
+}
+.nav-reveal-pill.is-visible { display: inline-flex; transform: translate(-50%, 0); opacity: 1; }
+.nav-reveal-pill i { color: var(--gold-light); }
+.topbar,
+.desktop-nav-wrapper,
+.bottom-nav {
+    will-change: transform;
+    transition: transform .28s var(--ease-out), background .3s, box-shadow .3s;
+}
+.topbar.nav-hidden { transform: translateY(-110%); box-shadow: none; }
+.desktop-nav-wrapper.nav-hidden { transform: translateY(-120%); }
+.bottom-nav.nav-hidden { transform: translateY(120%); }
+.topbar.nav-hidden,
+.desktop-nav-wrapper.nav-hidden,
+.bottom-nav.nav-hidden { pointer-events: none; }
+@media (min-width: 992px) {
+    .delivery-fab { bottom: 1.6rem; }
+    .nav-reveal-pill { bottom: 1.55rem; }
+}
+@media (max-width: 991px) {
+    .delivery-fab { right: 1rem; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+    .delivery-fab.nav-is-hidden { bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+    .delivery-fab__label { display: none; }
+    .nav-reveal-pill { bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* Better contrast for saved accounts / remember-me area on the dark login card */
+.auth-muted-label { color: rgba(255,255,255,.72) !important; }
+.saved-account-card {
+    background: rgba(255,255,255,.09) !important;
+    border-color: rgba(201,168,76,.34) !important;
+}
+.saved-account-card:hover { background: rgba(201,168,76,.16) !important; }
+.saved-account-name { color: #fff !important; font-weight: 800; text-shadow: 0 1px 10px rgba(0,0,0,.28); }
+.saved-account-action { color: rgba(255,255,255,.64) !important; }
+.saved-account-other { color: rgba(255,255,255,.78) !important; font-weight: 700; }

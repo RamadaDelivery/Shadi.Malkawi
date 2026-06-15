@@ -107,6 +107,8 @@ window.app = {
         localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name: ud.name, ts: Date.now() }));
         document.getElementById('authScreen').classList.remove('visible');
         document.getElementById('appContainer').style.display = 'block';
+        this.initSmartChrome();
+        this._updateDeliveryFab(true);
         document.getElementById('userName').textContent = ud.name;
         document.getElementById('userRole').textContent = ud.role;
         document.getElementById('userAvatar').textContent = ud.name[0];
@@ -131,6 +133,8 @@ window.app = {
         this.user = null; this.role = null; this.userName = null; this.userPerms = {};
         localStorage.removeItem('shmSession');
         document.getElementById('appContainer').style.display = 'none';
+        this._setNavigationHidden(false);
+        this._updateDeliveryFab(false);
         document.getElementById('authScreen').classList.add('visible');
         document.getElementById('loginUser').value = '';
         document.getElementById('loginPass').value = '';
@@ -257,17 +261,17 @@ window.app = {
         if (!accounts.length) { container.style.display = 'none'; return; }
         container.style.display = 'block';
         container.innerHTML = `
-            <div style="font-size:.78rem;color:rgba(255,255,255,.4);margin-bottom:.5rem;text-align:right;">الحسابات المحفوظة</div>
+            <div class="auth-muted-label" style="font-size:.78rem;margin-bottom:.5rem;text-align:right;">الحسابات المحفوظة</div>
             <div style="display:flex;flex-direction:column;gap:.4rem;">
                 ${accounts.map(a => `
-                    <div style="
+                    <div class="saved-account-card" style="
                         display:flex;align-items:center;gap:.6rem;
-                        background:rgba(255,255,255,.05);
-                        border:1px solid rgba(201,168,76,.15);
+                        background:rgba(255,255,255,.09);
+                        border:1px solid rgba(201,168,76,.34);
                         border-radius:12px;padding:.55rem .9rem;
-                        cursor:pointer;transition:background .2s;
-                    " onmouseenter="this.style.background='rgba(201,168,76,.08)'"
-                       onmouseleave="this.style.background='rgba(255,255,255,.05)'"
+                        cursor:pointer;transition:background .2s, border-color .2s, transform .2s;
+                    " onmouseenter="this.style.background='rgba(201,168,76,.16)';this.style.transform='translateY(-1px)'"
+                       onmouseleave="this.style.background='rgba(255,255,255,.09)';this.style.transform='translateY(0)'"
                        onclick="app.quickLogin('${this._jsArg(a.u)}')">
                         <div style="
                             width:32px;height:32px;border-radius:50%;flex-shrink:0;
@@ -275,20 +279,20 @@ window.app = {
                             display:flex;align-items:center;justify-content:center;
                             font-weight:800;font-size:.85rem;color:#1A1A2E;
                         ">${this._escapeHtml((a.u || '?')[0].toUpperCase())}</div>
-                        <span style="flex:1;color:rgba(255,255,255,.8);font-size:.88rem;">${this._escapeHtml(a.u)}</span>
+                        <span class="saved-account-name" style="flex:1;color:#fff;font-size:.88rem;font-weight:800;">${this._escapeHtml(a.u)}</span>
                         <button onclick="event.stopPropagation();app._removeAccount('${this._jsArg(a.u)}')" style="
-                            background:none;border:none;color:rgba(255,255,255,.3);
+                            background:none;border:none;color:rgba(255,255,255,.64);
                             cursor:pointer;font-size:.8rem;padding:.2rem .4rem;
                             border-radius:6px;transition:color .2s;
                         " onmouseenter="this.style.color='#e74c3c'"
-                           onmouseleave="this.style.color='rgba(255,255,255,.3)'">
+                           onmouseleave="this.style.color='rgba(255,255,255,.64)'">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
                 `).join('')}
             </div>
             <div style="text-align:center;margin-top:.6rem;">
-                <span style="font-size:.75rem;color:rgba(255,255,255,.25);cursor:pointer;"
+                <span class="saved-account-other" style="font-size:.75rem;color:rgba(255,255,255,.78);cursor:pointer;"
                     onclick="app.loginWithOther()">
                     <i class="fas fa-plus" style="font-size:.65rem;"></i> تسجيل دخول بحساب آخر
                 </span>
@@ -341,7 +345,71 @@ window.app = {
         if (id === 'customers')   { if (this.role === 'Admin') this.renderCustomers(); }
         if (id === 'users')       { if (this.role === 'Admin') this.renderUsersPage(); }
         if (id === 'audit')       { if (this.role === 'Admin') this.renderAuditPage(); }
+        this._setNavigationHidden(false);
+        this._updateDeliveryFab(true);
         this.closeAllDropdowns();
+    },
+
+
+
+    // ============ SMART NAV + FLOATING NEW DELIVERY ==========
+    _setNavigationHidden(hidden) {
+        const appVisible = document.getElementById('appContainer')?.style.display !== 'none';
+        const topbar = document.querySelector('.topbar');
+        const desktopNav = document.getElementById('desktopNav');
+        const bottomNav = document.getElementById('bottomNav');
+        const reveal = document.getElementById('navRevealPill');
+        const fab = document.getElementById('deliveryFab');
+        [topbar, desktopNav, bottomNav].forEach(el => el?.classList.toggle('nav-hidden', !!hidden));
+        reveal?.classList.toggle('is-visible', !!hidden && appVisible);
+        fab?.classList.toggle('nav-is-hidden', !!hidden);
+    },
+
+    _updateDeliveryFab(forceShow = false) {
+        const fab = document.getElementById('deliveryFab');
+        if (!fab) return;
+        const appVisible = document.getElementById('appContainer')?.style.display !== 'none';
+        const onEntry = document.getElementById('page-entry')?.classList.contains('active');
+        const canUse = !!this.user && this.isPageAllowed?.('entry') !== false;
+        const show = appVisible && canUse && !onEntry && (forceShow || window.scrollY > 160 || document.body.scrollHeight > window.innerHeight + 220);
+        fab.classList.toggle('is-visible', !!show);
+    },
+
+    initSmartChrome() {
+        if (this._smartChromeReady) return;
+        this._smartChromeReady = true;
+        let lastY = window.scrollY || 0;
+        let ticking = false;
+        const handle = () => {
+            const y = Math.max(0, window.scrollY || 0);
+            const delta = y - lastY;
+            const shouldHide = y > 120 && delta > 6;
+            const shouldShow = delta < -5 || y < 70;
+            if (shouldHide) this._setNavigationHidden(true);
+            if (shouldShow) this._setNavigationHidden(false);
+            this._updateDeliveryFab();
+            lastY = y;
+            ticking = false;
+        };
+        window.addEventListener('scroll', () => {
+            if (!ticking) {
+                window.requestAnimationFrame(handle);
+                ticking = true;
+            }
+        }, { passive: true });
+        window.addEventListener('resize', () => this._updateDeliveryFab(true));
+        this._updateDeliveryFab(true);
+    },
+
+    revealNavigation() {
+        this._setNavigationHidden(false);
+        this._updateDeliveryFab(true);
+    },
+
+    quickNewDelivery() {
+        this.revealNavigation();
+        this.gotoPage('entry');
+        setTimeout(() => document.getElementById('wiz-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
     },
 
     // ============ FIREBASE LISTENERS ============
@@ -5469,6 +5537,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 app.userPerms = fbUser?.perms || {};
                 document.getElementById('authScreen').classList.remove('visible');
                 document.getElementById('appContainer').style.display = 'block';
+                app.initSmartChrome();
+                app._updateDeliveryFab(true);
                 document.getElementById('userName').textContent = s.name;
                 document.getElementById('userRole').textContent = s.role;
                 document.getElementById('userAvatar').textContent = s.name[0];
@@ -5491,6 +5561,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     app.applyDark();
     app.initKeys();
+    app.initSmartChrome();
     app.renderSavedAccounts();
 
     // ── Register Service Worker + Auto-Update System ─────────────

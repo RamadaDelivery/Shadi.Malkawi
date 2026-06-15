@@ -1140,6 +1140,16 @@
             <!-- ════ END AUDIT TRAIL ════ -->
         </div><!-- نهاية الـ main-content بشكل صحيح -->
 
+        <!-- ── Floating Quick Actions ─────────────────────────── -->
+        <button class="delivery-fab" id="deliveryFab" type="button" onclick="app.quickNewDelivery()" aria-label="إضافة طلب توصيل جديد" title="إضافة طلب توصيل جديد">
+            <span class="delivery-fab__icon"><i class="fas fa-plus"></i></span>
+            <span class="delivery-fab__label">طلب جديد</span>
+        </button>
+        <button class="nav-reveal-pill" id="navRevealPill" type="button" onclick="app.revealNavigation()" aria-label="إظهار شريط التنقل">
+            <i class="fas fa-compass"></i>
+            <span>القائمة</span>
+        </button>
+
         <!-- ── Bottom Nav (Mobile) ──────────────────────────── -->
         <div class="bottom-nav" id="bottomNav">
             <button class="nav-btn active"    data-page="dashboard"   onclick="app.gotoPage('dashboard')"  ><i class="fas fa-chart-pie"></i>    <span>الرئيسية</span></button>
