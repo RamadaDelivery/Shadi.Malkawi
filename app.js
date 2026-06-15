@@ -50,17 +50,41 @@ window.app = {
         return hashed === stored;
     },
 
+    _barcodeExists(code, ignoreItemId = null, ignoreVarKey = null) {
+        const clean = (code || '').trim().toUpperCase();
+        if (!clean) return false;
+        return Object.entries(this.warehouse || {}).some(([id, w]) => {
+            if (id !== ignoreItemId && (w.barcode || '').toUpperCase() === clean) return true;
+            return Object.entries(w.variations || {}).some(([key, v]) => {
+                if (id === ignoreItemId && key === ignoreVarKey) return false;
+                return (v.barcode || '').toUpperCase() === clean;
+            });
+        });
+    },
+
+    _generateBarcode(ignoreItemId = null, ignoreVarKey = null) {
+        let code = '';
+        do {
+            const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
+            const timePart = Date.now().toString(36).slice(-4).toUpperCase();
+            code = `JW${timePart}${randomPart}`.slice(0, 12);
+        } while (this._barcodeExists(code, ignoreItemId, ignoreVarKey));
+        return code;
+    },
+
     // ============ LOGIN ============
     async login() {
 
         const u = document.getElementById('loginUser').value.trim().toLowerCase();
         const p = document.getElementById('loginPass').value;
+        if (!/^[a-z0-9._-]{2,40}$/.test(u)) { this.toast('اسم المستخدم غير صالح', 'error'); return; }
 
         // 1. Check constants.js first (built-in accounts — always available, no Firebase delay)
         let ud = null;
         const cu = USERS[u];
         if (cu) {
-            if (cu.pass !== p) { this.toast('بيانات الدخول غير صحيحة', 'error'); return; }
+            const ok = await this._passMatch(p, cu.passHash || cu.pass);
+            if (!ok) { this.toast('بيانات الدخول غير صحيحة', 'error'); return; }
             ud = { role: cu.role, name: cu.name, perms: {} };
         } else {
             // 2. Try Firebase dynamic users
@@ -80,7 +104,8 @@ window.app = {
             this._saveAccount(u, p);
         }
 
-localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name: ud.name }));        document.getElementById('authScreen').classList.remove('visible');
+        localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name: ud.name, ts: Date.now() }));
+        document.getElementById('authScreen').classList.remove('visible');
         document.getElementById('appContainer').style.display = 'block';
         document.getElementById('userName').textContent = ud.name;
         document.getElementById('userRole').textContent = ud.role;
@@ -200,11 +225,12 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
         try { return JSON.parse(localStorage.getItem('shmSavedAccounts') || '[]'); }
         catch { return []; }
     },
-    _saveAccount(username, password) {
+    _saveAccount(username) {
         const accounts = this._getSavedAccounts().filter(a => a.u !== username);
-        accounts.unshift({ u: username, p: password, ts: Date.now() });
+        accounts.unshift({ u: username, ts: Date.now() });
         localStorage.setItem('shmSavedAccounts', JSON.stringify(accounts.slice(0, 5)));
     },
+
     _removeAccount(username) {
         const accounts = this._getSavedAccounts().filter(a => a.u !== username);
         localStorage.setItem('shmSavedAccounts', JSON.stringify(accounts));
@@ -242,15 +268,15 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
                         cursor:pointer;transition:background .2s;
                     " onmouseenter="this.style.background='rgba(201,168,76,.08)'"
                        onmouseleave="this.style.background='rgba(255,255,255,.05)'"
-                       onclick="app.quickLogin('${a.u}','${a.p}')">
+                       onclick="app.quickLogin('${this._jsArg(a.u)}')">
                         <div style="
                             width:32px;height:32px;border-radius:50%;flex-shrink:0;
                             background:linear-gradient(135deg,#C9A84C,#9A7A2E);
                             display:flex;align-items:center;justify-content:center;
                             font-weight:800;font-size:.85rem;color:#1A1A2E;
-                        ">${a.u[0].toUpperCase()}</div>
-                        <span style="flex:1;color:rgba(255,255,255,.8);font-size:.88rem;">${a.u}</span>
-                        <button onclick="event.stopPropagation();app._removeAccount('${a.u}')" style="
+                        ">${this._escapeHtml((a.u || '?')[0].toUpperCase())}</div>
+                        <span style="flex:1;color:rgba(255,255,255,.8);font-size:.88rem;">${this._escapeHtml(a.u)}</span>
+                        <button onclick="event.stopPropagation();app._removeAccount('${this._jsArg(a.u)}')" style="
                             background:none;border:none;color:rgba(255,255,255,.3);
                             cursor:pointer;font-size:.8rem;padding:.2rem .4rem;
                             border-radius:6px;transition:color .2s;
@@ -269,11 +295,13 @@ localStorage.setItem('shmSession', JSON.stringify({ user: u, role: ud.role, name
             </div>
         `;
     },
-    async quickLogin(username, password) {
+    async quickLogin(username) {
         document.getElementById('loginUser').value = username;
-        document.getElementById('loginPass').value = password;
-        await this.login();
+        document.getElementById('loginPass').value = '';
+        document.getElementById('loginPass').focus();
+        this.toast('أدخل كلمة المرور للمتابعة', 'info');
     },
+
     loginWithOther() {
         document.getElementById('loginUser').value = '';
         document.getElementById('loginPass').value = '';
@@ -845,6 +873,107 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
         return [...COLORS_AR, ...this.customColors];
     },
 
+    // ============ DATA SAFETY & STOCK LEDGER HELPERS ============
+    _safeNum(v, fallback = 0) {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : fallback;
+    },
+
+    _safeQty(v, fallback = 1) {
+        const n = parseInt(v, 10);
+        return Number.isFinite(n) && n > 0 ? n : fallback;
+    },
+
+    _cleanText(v) {
+        return String(v ?? '').replace(/[<>]/g, '').trim();
+    },
+
+    _escapeHtml(v) {
+        return String(v ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    },
+    _jsArg(v) {
+        return String(v ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]/g, ' ');
+    },
+
+    _itemsOf(o) {
+        const items = Array.isArray(o?.items) && o.items.length
+            ? o.items
+            : [{ itemId: o?.itemId, itemName: o?.itemName, itemColor: o?.itemColor, size: o?.size, exactKey: o?.exactKey, qty: o?.qty }];
+        return items
+            .filter(it => it && (it.itemId || it.itemName))
+            .map(it => ({ ...it, qty: this._safeQty(it.qty, 1) }));
+    },
+
+    _qtySum(o) {
+        return this._itemsOf(o).reduce((sum, it) => sum + this._safeQty(it.qty, 1), 0);
+    },
+
+    _statusCounts(orders) {
+        const counts = { new: 0, process: 0, done: 0, delivered: 0, postponed: 0, canceled: 0 };
+        orders.forEach(o => { if (counts[o.status] !== undefined) counts[o.status]++; });
+        return counts;
+    },
+
+    _isStockActiveStatus(status) {
+        return !['canceled', 'postponed'].includes(status);
+    },
+
+    _stockKey(item, it) {
+        let key = it.exactKey || it.size || '';
+        if (item?.sizes && item.sizes[key] === undefined && it.itemColor) {
+            const alt = `${it.size} - ${it.itemColor}`;
+            if (item.sizes[alt] !== undefined) key = alt;
+        }
+        return key;
+    },
+
+    _stockDeltaPlan(items, direction, opts = {}) {
+        const buckets = new Map();
+        const sign = direction === 'return' ? 1 : -1;
+        for (const it of items || []) {
+            if (!it?.itemId) continue;
+            const item = this.warehouse[it.itemId];
+            if (!item) continue;
+            const key = this._stockKey(item, it);
+            if (!key) continue;
+            const path = `jawaher_warehouse/${it.itemId}/sizes/${key}`;
+            if (!buckets.has(path)) {
+                buckets.set(path, {
+                    path,
+                    itemId: it.itemId,
+                    key,
+                    name: item.name || it.itemName || 'صنف',
+                    current: this._safeNum(item.sizes?.[key], 0),
+                    delta: 0,
+                });
+            }
+            buckets.get(path).delta += sign * this._safeQty(it.qty, 1);
+        }
+
+        const updates = {};
+        for (const b of buckets.values()) {
+            const next = b.current + b.delta;
+            if (next < 0 && !opts.allowNegative) {
+                return {
+                    ok: false,
+                    updates: {},
+                    message: `الرصيد غير كافٍ لـ ${b.name} (${b.key}). المتوفر ${b.current} والمطلوب ${Math.abs(b.delta)}.`,
+                };
+            }
+            updates[b.path] = opts.allowNegative ? next : Math.max(0, next);
+        }
+        return { ok: true, updates };
+    },
+
+    _orderItemsSummary(o) {
+        return this._itemsOf(o).map(it => `${it.itemName || '-'} / ${it.itemColor || '-'} / ${it.size || '-'} × ${it.qty}`).join(' | ');
+    },
+
     filterSizesByColor(idx, colorName) {
         const sel = document.querySelector(`.ir-item[data-idx="${idx}"]`);
         const sizeSel = document.querySelector(`.ir-size[data-idx="${idx}"]`);
@@ -884,9 +1013,8 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
     // ============ ITEM ROWS (multi-product entry) ============
     initItemRows() {
         if (!document.getElementById('eItemsList')) return;
-        this._activeItemsContainerId = 'eItemsList';
         this.itemRows = [{ id: Date.now() }];
-        this._renderItemRowsInContainer('eItemsList');
+        this.renderItemRows();
     },
 addItemRow() {
         this._saveItemRowsState();
@@ -898,14 +1026,14 @@ addItemRow() {
         }
 
         this.itemRows.push({ id: Date.now() });
-        this._renderItemRowsInContainer(this._activeItemsContainerId || 'eItemsList');
-    },
+        this.renderItemRows();
+    },
 
     removeItemRow(idx) {
         if (this.itemRows.length <= 1) return;
         this._saveItemRowsState();
         this.itemRows.splice(idx, 1);
-        this._renderItemRowsInContainer(this._activeItemsContainerId || 'eItemsList');
+        this.renderItemRows();
     },
 
     _saveItemRowsState() {
@@ -922,17 +1050,8 @@ addItemRow() {
     },
 
     renderItemRows() {
-        // الـ container الافتراضي هو eItemsList (للـ wizard)
-        // في modal إضافة صنف للطلب نستخدم eItemsListModal
-        const containerId = document.getElementById('eItemsListModal') ? 'eItemsListModal' : 'eItemsList';
-        this._renderItemRowsInContainer(containerId);
-    },
-
-    _renderItemRowsInContainer(containerId) {
-        const container = document.getElementById(containerId);
+        const container = document.getElementById('eItemsList');
         if (!container) return;
-        // حفظ containerId الحالي لاستخدامه في addItemRow
-        this._activeItemsContainerId = containerId;
         container.innerHTML = this.itemRows.map((row, idx) => `
             <div class="item-row-card" id="itemrow_${idx}">
                 <!-- Row header: number + delete -->
@@ -1176,14 +1295,14 @@ addItemRow() {
 
     // ============ SAVE ORDER ============
     async saveOrder() {
-        const custName = document.getElementById('eCustName').value.trim();
-       const mob = document.getElementById('eCustMob').value.replace(/\D/g, '');
-        const gov = document.getElementById('eGovernorate').value;
-        const addr = document.getElementById('eAddr').value.trim();
-        const price = parseFloat(document.getElementById('ePrice').value);
-        const pageName = document.getElementById('ePageName').value;
+        const custName = this._cleanText(document.getElementById('eCustName').value);
+        const mob = document.getElementById('eCustMob').value.replace(/\D/g, '');
+        const gov = this._cleanText(document.getElementById('eGovernorate').value);
+        const addr = this._cleanText(document.getElementById('eAddr').value);
+        const price = this._safeNum(document.getElementById('ePrice').value, 0);
+        const pageName = this._cleanText(document.getElementById('ePageName').value);
         const entryUser = document.getElementById('eEntryUser').value;
-        const tags = document.getElementById('eTags').value.trim();
+        const tags = this._cleanText(document.getElementById('eTags').value);
 
 
         if (!custName) { this.toast('يرجى إدخال اسم الزبون', 'error'); return; }
@@ -1232,6 +1351,9 @@ addItemRow() {
             items.push({ itemId, itemName: item.name, itemColor: finalColor, size: finalSize, exactKey: sizeCombo, qty });
         }
 
+        const stockPlan = this._stockDeltaPlan(items, 'deduct');
+        if (!stockPlan.ok) { this.toast(stockPlan.message, 'error'); return; }
+
         const payload = {
             timestamp: Date.now(), date: document.getElementById('eDate').value,
             custName, custMob: '07' + mob, country: 'الأردن', governorate: gov, custAddr: addr,
@@ -1263,34 +1385,47 @@ addItemRow() {
         if (this.lastOrderId && this.orders[this.lastOrderId])
             this.printOrder(this.orders[this.lastOrderId], this.lastOrderId);
     },
-
-    // ============ DASHBOARD ============
     renderDashboard() {
-        const orders = Object.values(this.orders);
-        const counts = { new: 0, process: 0, done: 0, delivered: 0, postponed: 0, canceled: 0 };
-        let totalRev = 0, totalCost = 0;
+        const orders = Object.values(this.orders || {});
+        const counts = this._statusCounts(orders);
+        let totalRev = 0, totalCost = 0, potentialRev = 0;
         const itemSales = {};
+        const userCounts = {};
+
         orders.forEach(o => {
-            counts[o.status]++;
+            const price = this._safeNum(o.price, 0);
+            if (o.status !== 'canceled') potentialRev += price;
+            if (o.entryUser) userCounts[o.entryUser] = (userCounts[o.entryUser] || 0) + 1;
+
+            const itemsList = this._itemsOf(o);
             if (o.status === 'delivered') {
-                totalRev += parseFloat(o.price || 0);
-                // حساب التكلفة من كل أصناف الطلب وليس الصنف الأول فقط
-                const itemsList = o.items || [{ itemId: o.itemId, qty: o.qty }];
+                totalRev += price;
                 itemsList.forEach(it => {
                     const wItem = this.warehouse[it.itemId];
-                    if (wItem) totalCost += parseFloat(wItem.buyPrice || 0) * (parseInt(it.qty) || 1);
+                    if (wItem) totalCost += this._safeNum(wItem.buyPrice, 0) * this._safeQty(it.qty, 1);
                 });
             }
-            if (o.status !== 'canceled') itemSales[o.itemName] = (itemSales[o.itemName] || 0) + (o.qty || 1);
+            if (o.status !== 'canceled') {
+                itemsList.forEach(it => {
+                    const key = it.itemName || 'صنف غير معروف';
+                    itemSales[key] = (itemSales[key] || 0) + this._safeQty(it.qty, 1);
+                });
+            }
         });
-        const totalStock = Object.values(this.warehouse).reduce((s, w) => s + Object.values(w.sizes || {}).reduce((a, b) => a + b, 0), 0);
+
+        const stockItems = Object.values(this.warehouse || {});
+        const totalStock = stockItems.reduce((s, w) => s + Object.values(w.sizes || {}).reduce((a, b) => a + this._safeNum(b, 0), 0), 0);
+        const activeOrders = counts.new + counts.process + counts.done;
+        const deliveryRate = orders.length ? Math.round((counts.delivered / orders.length) * 100) : 0;
+        const returnRisk = orders.length ? Math.round(((counts.postponed + counts.canceled) / orders.length) * 100) : 0;
+        const grossProfit = totalRev - totalCost;
 
         const kpis = [
             { label: 'إجمالي الطلبات', value: orders.length, icon: 'fa-boxes', cls: 'kpi-gold' },
-            { label: 'جديدة', value: counts.new, icon: 'fa-star', cls: 'kpi-sapphire' },
+            { label: 'طلبات نشطة', value: activeOrders, icon: 'fa-bolt', cls: 'kpi-sapphire' },
             { label: 'جاهزة للتسليم', value: counts.done, icon: 'fa-box', cls: 'kpi-emerald' },
             { label: 'تم التسليم', value: counts.delivered, icon: 'fa-check-double', cls: 'kpi-amethyst' },
-            { label: 'إجمالي الإيرادات', value: totalRev.toFixed(2) + ' JOD', icon: 'fa-money-bill-wave', cls: 'kpi-emerald', small: true },
+            { label: 'صافي ربح تقديري', value: grossProfit.toFixed(2) + ' JOD', icon: 'fa-chart-line', cls: 'kpi-emerald', small: true },
             { label: 'إجمالي المستودع', value: totalStock + ' قطعة', icon: 'fa-warehouse', cls: 'kpi-onyx' },
         ];
         document.getElementById('kpiGrid').innerHTML = kpis.map(k => `
@@ -1300,64 +1435,70 @@ addItemRow() {
                 <div class="kpi-value" style="${k.small ? 'font-size:1.3rem' : ''}">${k.value}</div>
             </div>`).join('');
 
+        const ops = document.getElementById('opsHealth');
+        if (ops) {
+            const stockRisk = stockItems.filter(w => Object.values(w.sizes || {}).reduce((a,b)=>a+this._safeNum(b,0),0) < STOCK_ALERT_THRESHOLD).length;
+            ops.innerHTML = `
+                <div class="ops-card accent-blue"><span>معدل التسليم</span><strong>${deliveryRate}%</strong><small>${counts.delivered} طلب مسلم</small></div>
+                <div class="ops-card accent-green"><span>إيراد مستلم</span><strong>${totalRev.toFixed(2)}</strong><small>JOD</small></div>
+                <div class="ops-card accent-gold"><span>إيراد قيد التنفيذ</span><strong>${potentialRev.toFixed(2)}</strong><small>JOD بدون الملغي</small></div>
+                <div class="ops-card accent-red"><span>مخاطر المتابعة</span><strong>${returnRisk}%</strong><small>${counts.postponed + counts.canceled} مؤجل/ملغي</small></div>
+                <div class="ops-card accent-purple"><span>تنبيهات المخزون</span><strong>${stockRisk}</strong><small>أصناف تحت الحد</small></div>`;
+        }
+
         if (this.charts.status) this.charts.status.destroy();
         const isDark = this.isDark;
-        Chart.defaults.color = isDark ? '#aaa' : '#666';
+        Chart.defaults.color = isDark ? '#C8D4EA' : '#556274';
         this.charts.status = new Chart(document.getElementById('statusChart'), {
             type: 'doughnut',
-            data: { labels: Object.values(STATUS_AR), datasets: [{ data: Object.values(counts), backgroundColor: Object.values(STATUS_COLORS), borderWidth: 0 }] },
-            options: { cutout: '72%', plugins: { legend: { position: 'bottom', labels: { font: { family: 'Almarai' } } } } }
+            data: { labels: Object.values(STATUS_AR), datasets: [{ data: Object.values(counts), backgroundColor: Object.values(STATUS_COLORS), borderWidth: 0, hoverOffset: 8 }] },
+            options: { cutout: '72%', plugins: { legend: { position: 'bottom', labels: { font: { family: 'Almarai' }, usePointStyle: true } } } }
         });
 
         if (this.charts.items) this.charts.items.destroy();
-        const topItems = Object.entries(itemSales).sort((a, b) => b[1] - a[1]).slice(0, 6);
+        const topItems = Object.entries(itemSales).sort((a, b) => b[1] - a[1]).slice(0, 7);
         this.charts.items = new Chart(document.getElementById('itemChart'), {
             type: 'bar',
-            data: { labels: topItems.map(i => i[0]), datasets: [{ label: 'المبيعات', data: topItems.map(i => i[1]), backgroundColor: '#C9A84C', borderRadius: 8 }] },
-            options: { scales: { x: { grid: { display: false } }, y: { grid: { color: isDark ? '#333' : '#eee' } } }, plugins: { legend: { display: false } } }
+            data: { labels: topItems.map(i => i[0]), datasets: [{ label: 'المبيعات', data: topItems.map(i => i[1]), backgroundColor: '#2E5CC8', borderRadius: 12, maxBarThickness: 42 }] },
+            options: { scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: isDark ? 'rgba(255,255,255,.08)' : 'rgba(26,58,143,.08)' } } }, plugins: { legend: { display: false } } }
         });
 
         const alerts = [];
-        Object.values(this.warehouse).forEach(w => {
-            const total = Object.values(w.sizes || {}).reduce((a, b) => a + b, 0);
+        stockItems.forEach(w => {
+            const total = Object.values(w.sizes || {}).reduce((a, b) => a + this._safeNum(b, 0), 0);
             if (total < STOCK_ALERT_THRESHOLD) alerts.push({ name: w.name, qty: total, color: w.color });
         });
         const alertsEl = document.getElementById('stockAlerts');
         if (alertsEl) {
             alertsEl.innerHTML = alerts.length === 0
-                ? `<div style="color:var(--emerald);font-weight:700;text-align:center;padding:2rem;"><i class="fas fa-check-circle fa-2x mb-2 d-block"></i>المستودع بحالة جيدة</div>`
-                : alerts.map(a => `
+                ? `<div class="empty-state"><i class="fas fa-check-circle"></i><strong>المستودع بحالة ممتازة</strong><span>لا توجد أصناف تحت الحد الأدنى</span></div>`
+                : alerts.sort((a,b)=>a.qty-b.qty).slice(0,8).map(a => `
                     <div class="stock-alert">
                         <i class="fas fa-exclamation-triangle" style="color:var(--ruby-light);font-size:1.3rem;flex-shrink:0"></i>
-                        <div><div style="font-weight:800;font-size:.9rem">${a.name}</div>
+                        <div><div style="font-weight:800;font-size:.9rem">${this._escapeHtml(a.name)}</div>
                         <div style="font-size:.78rem;color:var(--ruby-light)">المتبقي: ${a.qty} قطعة</div></div>
                     </div>`).join('');
         }
 
         const userRanking = document.getElementById('entryUserRanking');
         if (userRanking) {
-            const userCounts = {};
-            orders.forEach(o => { if (o.entryUser) userCounts[o.entryUser] = (userCounts[o.entryUser] || 0) + 1; });
             const sorted = Object.entries(userCounts).sort((a, b) => b[1] - a[1]);
             const max = sorted[0]?.[1] || 1;
             const medals = ['🥇', '🥈', '🥉'];
             userRanking.innerHTML = sorted.length === 0
-                ? `<div style="color:var(--ink-mid);text-align:center;padding:1rem">لا توجد بيانات بعد</div>`
+                ? `<div class="empty-state"><i class="fas fa-user-clock"></i><strong>لا توجد بيانات بعد</strong><span>ستظهر إنتاجية المدخلين بعد تسجيل الطلبات</span></div>`
                 : sorted.map(([name, count], i) => `
-                    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
-                        <span style="font-size:1.3rem;flex-shrink:0;width:28px">${medals[i] || ''}</span>
+                    <div class="rank-row">
+                        <span class="rank-medal">${medals[i] || i + 1}</span>
                         <div style="flex:1">
-                            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                                <span style="font-weight:700;font-size:.9rem">${name}</span>
-                                <span style="font-weight:800;color:var(--gold)">${count} طلب</span>
-                            </div>
-                            <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
-                                <div style="height:100%;width:${Math.round(count / max * 100)}%;background:linear-gradient(90deg,var(--gold),var(--gold-dark));border-radius:4px"></div>
-                            </div>
+                            <div class="rank-meta"><span>${this._escapeHtml(name)}</span><strong>${count} طلب</strong></div>
+                            <div class="rank-track"><div style="width:${Math.round(count / max * 100)}%"></div></div>
                         </div>
                     </div>`).join('');
         }
     },
+
+
 
     // ============ ORDERS BOARD ============
     renderBoard() {
@@ -1450,14 +1591,37 @@ addItemRow() {
     },
     async kbBulkStatus(s) {
         const upd = {};
-        this.selectedKb.forEach(id => { upd[`jawaher_orders/${id}/status`] = s; });
-        await update(ref(db), upd);
+        const returnItems = [];
+        const deductItems = [];
         for (const id of this.selectedKb) {
-            if (s === 'canceled' || s === 'postponed') await this._returnStock(id);
+            const o = this.orders[id]; if (!o) continue;
+            upd[`jawaher_orders/${id}/status`] = s;
+            if (!this._isStockActiveStatus(s)) {
+                if (o.stockDeducted) {
+                    returnItems.push(...this._itemsOf(o));
+                    upd[`jawaher_orders/${id}/stockDeducted`] = false;
+                }
+            } else if (!o.stockDeducted) {
+                deductItems.push(...this._itemsOf(o));
+                upd[`jawaher_orders/${id}/stockDeducted`] = true;
+            }
         }
-        this.selectedKb.clear(); this.updateKbBulkPanel();
-        this.toast('تم تحديث الحالة', 'success');
+        if (returnItems.length) {
+            const plan = this._stockDeltaPlan(returnItems, 'return');
+            if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+            Object.assign(upd, plan.updates);
+        }
+        if (deductItems.length) {
+            const plan = this._stockDeltaPlan(deductItems, 'deduct');
+            if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+            Object.assign(upd, plan.updates);
+        }
+        await update(ref(db), upd);
+        this.selectedKb.clear(); this.updateKbBulkPanel(); this.renderBoard();
+        this.toast('تم التحديث الجماعي مع تسوية المخزون', 'success');
     },
+
+
     kbBulkPrint() { this.executePrint([...this.selectedKb]); this.selectedKb.clear(); this.updateKbBulkPanel(); },
 
     // ============ ORDER MODAL ============
@@ -1552,7 +1716,7 @@ addItemRow() {
         <div class="modal-sheet" style="max-width:480px">
             <div class="modal-handle"></div>
             <div class="modal-title"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> إضافة صنف للطلب</div>
-            <div id="addItemRows"><div id="eItemsListModal" style="display:block"></div></div>
+            <div id="addItemRows"><div id="eItemsList" style="display:block"></div></div>
             <button class="add-item-row-btn mt-2" onclick="app.addItemRow()"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> صنف آخر</button>
             <div class="d-flex gap-3 mt-4">
                 <button class="btn-j btn-gold flex-fill" onclick="app._confirmAddItemsToOrder('${orderId}')">
@@ -1563,7 +1727,7 @@ addItemRow() {
         </div>`;
         document.body.appendChild(modal);
         this.itemRows = [{ id: Date.now() }];
-        this._renderItemRowsInContainer('eItemsListModal');
+        this.renderItemRows();
     },
 
     async _confirmAddItemsToOrder(orderId) {
@@ -1590,12 +1754,12 @@ addItemRow() {
         const updates = {};
         updates[`jawaher_orders/${orderId}/items`] = mergedItems;
         updates[`jawaher_orders/${orderId}/qty`] = mergedItems.reduce((s,it)=>s+(it.qty||1),0);
-        // خصم من المستودع فوراً
-        for (const it of newItems) {
-            const wItem = this.warehouse[it.itemId]; if (!wItem) continue;
-            let key = it.exactKey || it.size;
-            const current = wItem.sizes?.[key] || 0;
-            updates[`jawaher_warehouse/${it.itemId}/sizes/${key}`] = Math.max(0, current - it.qty);
+        // خصم من المستودع فقط إذا كان الطلب محجوزاً من المخزون
+        if (o.stockDeducted || this._isStockActiveStatus(o.status)) {
+            const plan = this._stockDeltaPlan(newItems, 'deduct');
+            if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+            Object.assign(updates, plan.updates);
+            updates[`jawaher_orders/${orderId}/stockDeducted`] = true;
         }
         await update(ref(db), updates);
         this.log('edit', orderId, `إضافة ${newItems.length} صنف للطلب`);
@@ -1603,35 +1767,68 @@ addItemRow() {
         document.getElementById('addItemToOrderModal')?.remove();
         this.openOrderModal(orderId);
     },
-
 async updateOrder() {
         const id = this.modalOrderId; if (!id) return;
-        const o = this.orders[id];
+        const o = this.orders[id]; if (!o) return;
         try {
             const payload = {
-                custName: document.getElementById('mo_name').value.trim(),
-                custMob: document.getElementById('mo_mob').value.trim(),
-                custAddr: document.getElementById('mo_addr').value.trim(),
-                price: parseFloat(document.getElementById('mo_price').value) || 0,
-                tags: document.getElementById('mo_tags').value.trim(),
+                custName: this._cleanText(document.getElementById('mo_name').value),
+                custMob: this._cleanText(document.getElementById('mo_mob').value),
+                custAddr: this._cleanText(document.getElementById('mo_addr').value),
+                price: this._safeNum(document.getElementById('mo_price').value, 0),
+                tags: this._cleanText(document.getElementById('mo_tags').value),
             };
-            if (o.items) {
-                payload.items = o.items.map((it, idx) => {
+            const updates = { [`jawaher_orders/${id}`]: { ...o, ...payload } };
+
+            if (Array.isArray(o.items) && o.items.length) {
+                const oldItems = this._itemsOf(o);
+                const newItems = oldItems.map((it, idx) => {
                     const el = document.getElementById(`mo_qty_${idx}`);
-                    return el ? { ...it, qty: parseInt(el.value)||it.qty } : it;
+                    return el ? { ...it, qty: this._safeQty(el.value, it.qty) } : it;
                 });
-                payload.qty = payload.items.reduce((s, it) => s + (it.qty||1), 0);
+                payload.items = newItems;
+                payload.qty = newItems.reduce((s, it) => s + this._safeQty(it.qty, 1), 0);
+                updates[`jawaher_orders/${id}/items`] = newItems;
+                updates[`jawaher_orders/${id}/qty`] = payload.qty;
+
+                if (o.stockDeducted) {
+                    const buckets = new Map();
+                    newItems.forEach((it, idx) => {
+                        const oldQty = this._safeQty(oldItems[idx]?.qty, 1);
+                        const newQty = this._safeQty(it.qty, 1);
+                        const qtyDelta = newQty - oldQty;
+                        if (qtyDelta === 0 || !it.itemId) return;
+                        const item = this.warehouse[it.itemId]; if (!item) return;
+                        const key = this._stockKey(item, it);
+                        const path = `jawaher_warehouse/${it.itemId}/sizes/${key}`;
+                        if (!buckets.has(path)) {
+                            buckets.set(path, { path, name: item.name || it.itemName || 'صنف', key, current: this._safeNum(item.sizes?.[key], 0), delta: 0 });
+                        }
+                        // Increasing order qty deducts extra stock; decreasing order qty returns stock.
+                        buckets.get(path).delta += -qtyDelta;
+                    });
+                    for (const b of buckets.values()) {
+                        const next = b.current + b.delta;
+                        if (next < 0) {
+                            this.toast(`الرصيد غير كافٍ لتعديل ${b.name} (${b.key}). المتوفر ${b.current} والمطلوب ${Math.abs(b.delta)}.`, 'error');
+                            return;
+                        }
+                        updates[b.path] = next;
+                    }
+                }
             }
-            await update(ref(db, `jawaher_orders/${id}`), payload);
-            this.log('edit', id, 'تعديل بيانات الطلب');
+
+            await update(ref(db), updates);
+            this.log('edit', id, 'تعديل بيانات الطلب مع تسوية المخزون');
             this._auditLog('order_edit', id, o, payload, `تعديل طلب ${o.custName}`);
-            this.toast('تم حفظ التعديلات بنجاح ✓', 'success');
+            this.toast('تم حفظ التعديلات وتحديث المخزون بدقة ✓', 'success');
             this.closeModal('orderModal');
         } catch (err) {
             console.error(err);
             this.toast('حدث خطأ أثناء التحديث', 'error');
         }
     },
+
 
     _moAdjQty(idx, delta) {
         const el = document.getElementById(`mo_qty_${idx}`);
@@ -1680,120 +1877,84 @@ async updateOrder() {
         this.openOrderModal(orderId);
     },
         async moveOrder(id, status) {
-        const before = { status: this.orders[id]?.status };
-        await update(ref(db, `jawaher_orders/${id}`), { status });
-        if (status === 'canceled' || status === 'postponed') await this._returnStock(id);
-        this.log('status', id, `تغيير الحالة إلى ${STATUS_AR[status]}`);
-        this._auditLog('order_edit', id, before, { status }, `تغيير حالة الطلب: ${STATUS_AR[before.status]} ← ${STATUS_AR[status]}`);
-        this.toast('تم تغيير المرحلة', 'success'); this.closeModal('orderModal');
-    },
+        const o = this.orders[id]; if (!o) return;
+        const before = { status: o.status, stockDeducted: !!o.stockDeducted };
+        const updates = { [`jawaher_orders/${id}/status`]: status };
 
+        if (!this._isStockActiveStatus(status)) {
+            if (o.stockDeducted) {
+                const plan = this._stockDeltaPlan(this._itemsOf(o), 'return');
+                if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+                Object.assign(updates, plan.updates);
+                updates[`jawaher_orders/${id}/stockDeducted`] = false;
+            }
+        } else if (!o.stockDeducted) {
+            const plan = this._stockDeltaPlan(this._itemsOf(o), 'deduct');
+            if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+            Object.assign(updates, plan.updates);
+            updates[`jawaher_orders/${id}/stockDeducted`] = true;
+        }
+
+        await update(ref(db), updates);
+        this.log('status', id, `تغيير الحالة إلى ${STATUS_AR[status]}`);
+        this._auditLog('order_edit', id, before, { status, stockDeducted: updates[`jawaher_orders/${id}/stockDeducted`] ?? o.stockDeducted }, `تغيير حالة الطلب: ${STATUS_AR[before.status]} ← ${STATUS_AR[status]}`);
+        this.toast('تم تغيير المرحلة وتحديث المخزون بدقة', 'success'); this.closeModal('orderModal');
+    },
     async deleteOrder(id) {
         if (!confirm('حذف الطلب نهائياً؟')) return;
         const o = this.orders[id];
-        const updates = {};
-        // إرجاع المخزون إذا كان الطلب مخصوماً مسبقاً
-        // return stock if deducted OR if order has items with itemId (safety fallback)
-        const hasStockToReturn = o && (o.stockDeducted || (o.items && o.items.some(i => i.itemId)) || o.itemId);
-        if (hasStockToReturn) {
-            const itemsToReturn = o.items || [{ itemId: o.itemId, size: o.exactKey || o.size, exactKey: o.exactKey, itemColor: o.itemColor, qty: o.qty }];
-            for (const it of itemsToReturn) {
-                if (!it.itemId) continue;
-                const wItem = this.warehouse[it.itemId]; if (!wItem) continue;
-                let key = it.exactKey || it.size;
-                if (wItem.sizes && wItem.sizes[key] === undefined && it.itemColor) {
-                    if (wItem.sizes[`${it.size} - ${it.itemColor}`] !== undefined) key = `${it.size} - ${it.itemColor}`;
-                }
-                const current = wItem.sizes?.[key] || 0;
-                updates[`jawaher_warehouse/${it.itemId}/sizes/${key}`] = current + (parseInt(it.qty) || 1);
-            }
+        const updates = { [`jawaher_orders/${id}`]: null };
+        if (o?.stockDeducted) {
+            const plan = this._stockDeltaPlan(this._itemsOf(o), 'return');
+            if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+            Object.assign(updates, plan.updates);
         }
-        if (Object.keys(updates).length > 0) await update(ref(db), updates);
-        await remove(ref(db, `jawaher_orders/${id}`));
-        this.log('delete', id, `حذف الطلب${hasStockToReturn ? ' (تم إرجاع المخزون)' : ''}`);
+        await update(ref(db), updates);
+        this.log('delete', id, `حذف الطلب${o?.stockDeducted ? ' (تم إرجاع المخزون)' : ''}`);
         this._auditLog('order_delete', id, o, null, `حذف طلب ${o?.custName || ''} | السعر: ${o?.price || 0} JOD`);
-        this.toast('تم الحذف' + (hasStockToReturn ? ' وإرجاع الكمية للمستودع' : ''), 'success');
+        this.toast('تم الحذف' + (o?.stockDeducted ? ' وإرجاع الكمية للمستودع' : ''), 'success');
         this.closeModal('orderModal');
     },
+
+
 
     // ── خصم مباشر عند إنشاء الطلب (payload لم يُحفظ في this.orders بعد) ──
     async deductStockDirect(orderId, payload) {
         if (!payload) return;
-        const itemsToDeduct = payload.items || [{ itemId: payload.itemId, size: payload.exactKey || payload.size, exactKey: payload.exactKey, itemColor: payload.itemColor, qty: payload.qty }];
-        const updates = {};
-        for (const it of itemsToDeduct) {
-            if (!it.itemId) continue;
-            const item = this.warehouse[it.itemId]; if (!item) continue;
-            let keyToDeduct = it.exactKey || it.size;
-            if (item.sizes && item.sizes[keyToDeduct] === undefined && it.itemColor) {
-                if (item.sizes[`${it.size} - ${it.itemColor}`] !== undefined) keyToDeduct = `${it.size} - ${it.itemColor}`;
-            }
-            const current = item.sizes?.[keyToDeduct] || 0;
-            const qty = parseInt(it.qty) || 1;
-            updates[`jawaher_warehouse/${it.itemId}/sizes/${keyToDeduct}`] = Math.max(0, current - qty);
-        }
-        if (Object.keys(updates).length > 0) {
-            updates[`jawaher_orders/${orderId}/stockDeducted`] = true;
-            await update(ref(db), updates);
+        const plan = this._stockDeltaPlan(this._itemsOf(payload), 'deduct');
+        if (!plan.ok) { throw new Error(plan.message); }
+        if (Object.keys(plan.updates).length > 0) {
+            plan.updates[`jawaher_orders/${orderId}/stockDeducted`] = true;
+            await update(ref(db), plan.updates);
         }
     },
+
+
 
     // ============ STOCK DEDUCTION ============
 async deductStock(orderId) {
-        const o = this.orders[orderId]; if (!o) return;
-        
-        // الحماية: إذا تم خصم مخزون هذا الطلب مسبقاً، لا تقم بالخصم مرة أخرى
-        if (o.stockDeducted) return; 
-
-        const itemsToDeduct = o.items || [{ itemId: o.itemId, size: o.exactKey || o.size, exactKey: o.exactKey, itemColor: o.itemColor, qty: o.qty }];
-        const updates = {};
-        
-        for (const it of itemsToDeduct) {
-            if (!it.itemId) continue;
-            const item = this.warehouse[it.itemId]; if (!item) continue;
-            let keyToDeduct = it.exactKey || it.size;
-            if (item.sizes && item.sizes[keyToDeduct] === undefined && it.itemColor) {
-                if (item.sizes[`${it.size} - ${it.itemColor}`] !== undefined) keyToDeduct = `${it.size} - ${it.itemColor}`;
-            }
-            const current = item.sizes?.[keyToDeduct] || 0;
-            const qty = parseInt(it.qty) || 1;
-            updates[`jawaher_warehouse/${it.itemId}/sizes/${keyToDeduct}`] = Math.max(0, current - qty);
-            this.log('stock', orderId, `خصم ${qty} قطعة من ${item.name} مقاس/لون ${keyToDeduct}`);
-        }
-        
-        if (Object.keys(updates).length > 0) {
-            // وضع علامة أنه تم الخصم لتجنب الخصم المزدوج
-            updates[`jawaher_orders/${orderId}/stockDeducted`] = true; 
-            await update(ref(db), updates);
-        }
-    },
-
+        const o = this.orders[orderId]; if (!o) return;
+        if (o.stockDeducted) return;
+        const plan = this._stockDeltaPlan(this._itemsOf(o), 'deduct');
+        if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+        if (Object.keys(plan.updates).length > 0) {
+            plan.updates[`jawaher_orders/${orderId}/stockDeducted`] = true;
+            await update(ref(db), plan.updates);
+        }
+    },
 
     // ── إرجاع المخزون عند الإلغاء أو التأجيل ──────────────
     async _returnStock(orderId) {
-        const o = this.orders[orderId]; if (!o) return;
-        // return stock if deducted OR if order has items (safety fallback for orders missing the flag)
-        const shouldReturn = o.stockDeducted || (o.items && o.items.some(i => i.itemId)) || o.itemId;
-        if (!shouldReturn) return;
-        const itemsToReturn = o.items || [{ itemId: o.itemId, size: o.exactKey || o.size, exactKey: o.exactKey, itemColor: o.itemColor, qty: o.qty }];
-        const updates = {};
-        for (const it of itemsToReturn) {
-            if (!it.itemId) continue;
-            const item = this.warehouse[it.itemId]; if (!item) continue;
-            let key = it.exactKey || it.size;
-            if (item.sizes && item.sizes[key] === undefined && it.itemColor) {
-                if (item.sizes[`${it.size} - ${it.itemColor}`] !== undefined) key = `${it.size} - ${it.itemColor}`;
-            }
-            const current = item.sizes?.[key] || 0;
-            const qty = parseInt(it.qty) || 1;
-            updates[`jawaher_warehouse/${it.itemId}/sizes/${key}`] = current + qty;
-            this.log('stock', orderId, `إرجاع ${qty} قطعة لـ ${item.name} مقاس/لون ${key}`);
-        }
-        if (Object.keys(updates).length > 0) {
-            updates[`jawaher_orders/${orderId}/stockDeducted`] = false;
-            await update(ref(db), updates);
+        const o = this.orders[orderId]; if (!o || !o.stockDeducted) return;
+        const plan = this._stockDeltaPlan(this._itemsOf(o), 'return');
+        if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+        if (Object.keys(plan.updates).length > 0) {
+            plan.updates[`jawaher_orders/${orderId}/stockDeducted`] = false;
+            await update(ref(db), plan.updates);
         }
     },
+
+
 
     // ============ PRINT ============
       printOrder(o, id) {
@@ -1988,7 +2149,7 @@ ${labelsHtml}
             if (isUserOnly && o.entryUser !== this.userName) return false;
             if (q && !((o.custName || '').toLowerCase().includes(q) || (o.custMob || '').includes(q) || id.includes(q))) return false;
             if (st && o.status !== st) return false;
-            if (it && o.itemName !== it) return false;
+            if (it && !this._itemsOf(o).some(x => x.itemName === it)) return false;
             if (pg && o.pageName !== pg) return false;
             if ((fr || to) && o.date) {
                 const [d, m, y] = o.date.split('/');
@@ -2004,7 +2165,7 @@ ${labelsHtml}
         const filtered = this.getFiltered();
         const counts = { new: 0, process: 0, done: 0, delivered: 0, postponed: 0, canceled: 0 };
         const sums = { new: 0, process: 0, done: 0, delivered: 0, postponed: 0, canceled: 0 };
-        filtered.forEach(([, o]) => { counts[o.status]++; sums[o.status] += parseFloat(o.price || 0); });
+        filtered.forEach(([, o]) => { if (counts[o.status] !== undefined) { counts[o.status]++; sums[o.status] += this._safeNum(o.price, 0); } });
         document.getElementById('stageCards').innerHTML = Object.entries(STATUS_AR).map(([k, v]) => `
             <div class="col-4 col-md-2">
                 <div style="background:var(--glass);border:1px solid ${STATUS_COLORS[k]}25;border-radius:var(--radius-sm);padding:.75rem;text-align:center;border-top:3px solid ${STATUS_COLORS[k]}">
@@ -2087,45 +2248,90 @@ ${labelsHtml}
     },
     async rBulkStatus(s) {
         const upd = {};
-        this.selectedR.forEach(id => { upd[`jawaher_orders/${id}/status`] = s; });
-        await update(ref(db), upd);
+        const returnItems = [];
+        const deductItems = [];
         for (const id of this.selectedR) {
-            if (s === 'canceled' || s === 'postponed') await this._returnStock(id);
+            const o = this.orders[id]; if (!o) continue;
+            upd[`jawaher_orders/${id}/status`] = s;
+            if (!this._isStockActiveStatus(s)) {
+                if (o.stockDeducted) {
+                    returnItems.push(...this._itemsOf(o));
+                    upd[`jawaher_orders/${id}/stockDeducted`] = false;
+                }
+            } else if (!o.stockDeducted) {
+                deductItems.push(...this._itemsOf(o));
+                upd[`jawaher_orders/${id}/stockDeducted`] = true;
+            }
         }
+        if (returnItems.length) {
+            const plan = this._stockDeltaPlan(returnItems, 'return');
+            if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+            Object.assign(upd, plan.updates);
+        }
+        if (deductItems.length) {
+            const plan = this._stockDeltaPlan(deductItems, 'deduct');
+            if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+            Object.assign(upd, plan.updates);
+        }
+        await update(ref(db), upd);
         this.selectedR.clear(); this.updateRBulkPanel(); this.renderTable();
-        this.toast('تم التحديث', 'success');
+        this.toast('تم التحديث الجماعي مع تسوية المخزون', 'success');
     },
+
+
     rBulkPrint() { this.executePrint([...this.selectedR]); this.selectedR.clear(); this.updateRBulkPanel(); },
     async rBulkDelete() {
         if (!confirm(`حذف ${this.selectedR.size} طلبات؟`)) return;
-        for (const id of this.selectedR) { await this._returnStock(id); }
         const upd = {};
-        this.selectedR.forEach(id => { upd[`jawaher_orders/${id}`] = null; this.log('delete', id, 'حذف جماعي'); });
+        const returnItems = [];
+        for (const id of this.selectedR) {
+            const o = this.orders[id];
+            if (o?.stockDeducted) returnItems.push(...this._itemsOf(o));
+            upd[`jawaher_orders/${id}`] = null;
+            this.log('delete', id, 'حذف جماعي');
+        }
+        if (returnItems.length) {
+            const plan = this._stockDeltaPlan(returnItems, 'return');
+            if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+            Object.assign(upd, plan.updates);
+        }
         await update(ref(db), upd);
         this.selectedR.clear(); this.updateRBulkPanel(); this.renderTable();
-        this.toast('تم الحذف', 'success');
+        this.toast('تم الحذف وإرجاع أي مخزون مخصوم', 'success');
     },
+
+
     resetReportFilters() {
         ['rSearch', 'rStatus', 'rItem', 'rPage', 'rFrom', 'rTo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
         this.renderTable();
     },
     exportExcel() {
         const rows = this.getFiltered().map(([id, o]) => ({
-            'رقم الطلب': id, 'الزبون': o.custName, 'الموبايل': o.custMob,
-            'الدولة': o.country || '', 'المحافظة': o.governorate || '', 'العنوان': o.custAddr || '',
-            'المنتج': o.itemName || '', 'المقاس': o.size || '', 'الكمية': o.qty || 1,
-            'السعر': o.price, 'العملة': o.currency || 'JOD', 'الحالة': STATUS_AR[o.status] || o.status,
-            'الصفحة': o.pageName || '', 'ملاحظات': o.tags || '', 'المدخل': o.entryUser || '', 'التاريخ': o.date || ''
+            'رقم الطلب': id,
+            'الزبون': o.custName,
+            'الموبايل': o.custMob,
+            'الدولة': o.country || '',
+            'المحافظة': o.governorate || '',
+            'العنوان': o.custAddr || '',
+            'الأصناف': this._orderItemsSummary(o),
+            'إجمالي الكمية': this._qtySum(o),
+            'السعر': o.price,
+            'العملة': o.currency || 'JOD',
+            'الحالة': STATUS_AR[o.status] || o.status,
+            'الصفحة': o.pageName || '',
+            'ملاحظات': o.tags || '',
+            'المدخل': o.entryUser || '',
+            'التاريخ': o.date || '',
+            'المخزون مخصوم': o.stockDeducted ? 'نعم' : 'لا'
         }));
         if (!rows.length) { this.toast('لا يوجد بيانات', 'warning'); return; }
         const ws = XLSX.utils.json_to_sheet(rows);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-        XLSX.writeFile(wb, `Jawaher_${Date.now()}.xlsx`);
+        XLSX.writeFile(wb, `SHM_Orders_${Date.now()}.xlsx`);
         this.toast('تم التصدير', 'success');
     },
 
-    // ============ WAREHOUSE ============
     scanWarehouseBarcode() {
         const code = document.getElementById('wBarcodeScanner').value.trim().toUpperCase();
         if (!code) { this.renderWarehouse(); return; }
@@ -2211,13 +2417,17 @@ ${labelsHtml}
         const total = this._bulkQueue.reduce((s,q)=>s+q.qty,0);
         const label = type === 'in' ? 'إدخال' : 'صرف';
         if (!confirm(`تأكيد ${label} ${total} قطعة؟`)) return;
-        const updates = {};
-        for (const item of this._bulkQueue) {
-            const w = this.warehouse[item.itemId]; if (!w) continue;
-            const current = w.sizes?.[item.varKey] || 0;
-            updates[`jawaher_warehouse/${item.itemId}/sizes/${item.varKey}`] = type === 'in' ? current + item.qty : Math.max(0, current - item.qty);
-        }
-        await update(ref(db), updates);
+        const stockItems = this._bulkQueue.map(item => ({
+            itemId: item.itemId,
+            itemName: item.itemName,
+            itemColor: item.color,
+            size: item.size,
+            exactKey: item.varKey,
+            qty: item.qty
+        }));
+        const plan = this._stockDeltaPlan(stockItems, type === 'in' ? 'return' : 'deduct');
+        if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+        await update(ref(db), plan.updates);
         this.log('bulk_transfer', 'batch', `${label}: ${this._bulkQueue.map(q=>`${q.itemName}(${q.qty})`).join(', ')}`);
         this.toast(`تم ${label} ${total} قطعة ✓`, 'success');
         this._bulkQueue = [];
@@ -2248,7 +2458,7 @@ ${labelsHtml}
         const mainBarcode = document.getElementById('nimBarcode')?.value?.trim().toUpperCase() || '';
         grid.innerHTML = (this.nimSizeRows || []).map((row, i) => {
             const s = row.size || ''; const c = row.color || ''; const hex = row.hex || '';
-            const b = row.barcode !== undefined ? row.barcode : mainBarcode;
+            const b = row.barcode !== undefined ? row.barcode : '';
             return `<div class="col-12 nim-size-row" id="nimsr_${i}">
                 <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;background:var(--paper);padding:8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px">
                     <input type="text"   class="form-control-j nim-s-val" style="width:60px;text-align:center;font-weight:700" placeholder="مقاس" value="${s}">
@@ -2266,8 +2476,7 @@ ${labelsHtml}
     addNimSizeRow() {
         if (!this.nimSizeRows) this.nimSizeRows = [];
         this._saveNimSizeRows();
-        const mainBarcode2 = document.getElementById('nimBarcode')?.value?.trim().toUpperCase() || '';
-        this.nimSizeRows.push({ size: '', barcode: mainBarcode2 });
+        this.nimSizeRows.push({ size: '', barcode: '' });
         this.renderNimSizesGrid();
     },
     removeNimSizeRow(i) {
@@ -2280,7 +2489,7 @@ ${labelsHtml}
         const buyPrice = parseFloat(document.getElementById('nimBuyPrice').value) || 0;
         const sellPrice = parseFloat(document.getElementById('nimSellPrice').value) || 0;
         const pageName = document.getElementById('nimPage').value.trim();
-        const sizes = {}; const variations = {};
+        const sizes = {}; const variations = {}; const usedBarcodes = new Set();
 
         for (const row of document.querySelectorAll('.nim-size-row')) {
             const sz = row.querySelector('.nim-s-val')?.value.trim() || '';
@@ -2293,7 +2502,9 @@ ${labelsHtml}
                 return;
             }
             if (!sz) continue;
-            if (!b) b = 'JW' + Math.random().toString(36).substr(2, 6).toUpperCase();
+            if (!b) b = this._generateBarcode();
+            if (usedBarcodes.has(b)) { this.toast(`Ø§Ù„Ø¨Ø§Ø±ÙƒÙˆØ¯ ${b} Ù…ÙƒØ±Ø± ÙÙŠ Ù†ÙØ³ Ø§Ù„Ù…Ù†ØªØ¬`, 'error'); return; }
+            usedBarcodes.add(b);
             const existing = Object.values(this.warehouse).find(w => w.barcode === b || (w.variations && Object.values(w.variations).some(v => v.barcode === b)));
             if (existing) { this.toast(`الباركود ${b} مستخدم مسبقاً`, 'error'); return; }
             const key = c ? `${sz} - ${c}` : sz;
@@ -2564,9 +2775,9 @@ ${labelsHtml}
         updates[`jawaher_warehouse/${itemId}/sizes/${key}`] = finalQty;
 
         // تحديث معلومات الـ variations لضمان ظهور اللون والباركود مستقبلاً لهذا الصنف الجديد
-        if (!item.sizes?.[key]) {
+        if (!Object.prototype.hasOwnProperty.call(item.sizes || {}, key)) {
             const vHex = document.getElementById('asColor').dataset.hex || '';
-            const vBarcode = 'JW' + Math.random().toString(36).substr(2, 6).toUpperCase();
+            const vBarcode = this._generateBarcode(itemId, key);
             updates[`jawaher_warehouse/${itemId}/variations/${key}`] = { size, color, hex: vHex, barcode: vBarcode };
         }
 
@@ -2858,11 +3069,13 @@ loadPurchaseItem() {
         const invoiceDate = document.getElementById('pInvoiceDate').value || new Date().toLocaleDateString('en-GB');
         const notes = document.getElementById('pNotes').value.trim();
         const color = document.getElementById('pColor')?.value.trim() || '';
+        if (manualBarcode && this._barcodeExists(manualBarcode, existingId || null)) { this.toast(`Barcode ${manualBarcode} is already used`, 'error'); return; }
         if (!pageName) { this.toast('اسم الصفحة إجباري', 'error'); return; }
         if (!existingId && !newName) { this.toast('يرجى اختيار أو إدخال اسم المنتج', 'error'); return; }
 
-      const sizes = {};
+const sizes = {};
 const sizeColors = {};
+const variations = {};
 let colorMissing = false;
 for (const row of this.pSizeData) {
     const sz = row.size.trim();
@@ -2874,6 +3087,7 @@ for (const row of this.pSizeData) {
         const key = col ? `${sz} - ${col}` : sz;
         sizes[key] = (sizes[key] || 0) + qty;
         sizeColors[key] = col;
+        variations[key] = { size: sz, color: col, hex: row.colorHex || this._colorHex(col) || '' };
     }
 }
         if (colorMissing) { this.toast('اللون إجباري لكل مقاس', 'error'); return; }
@@ -2883,7 +3097,7 @@ for (const row of this.pSizeData) {
         let isNewItem = false;
         if (!targetId) {
             isNewItem = true;
-            const barcode = manualBarcode || ('JW' + Date.now().toString().slice(-8));
+            const barcode = manualBarcode || this._generateBarcode();
             const newRef = await push(warehouseRef, { name: newName, buyPrice, sellPrice, pageName, color, barcode, sizes: {}, sizeColors: {}, createdAt: Date.now() });
             targetId = newRef.key;
         }
@@ -2891,10 +3105,23 @@ for (const row of this.pSizeData) {
         const item = this.warehouse[targetId];
         const existingSizes = isNewItem ? {} : (item?.sizes || {});
         const existingSizeColors = isNewItem ? {} : (item?.sizeColors || {});
+        const existingVariations = isNewItem ? {} : (item?.variations || {});
         const mergedSizes = { ...existingSizes };
         Object.entries(sizes).forEach(([s, q]) => { mergedSizes[s] = (mergedSizes[s] || 0) + q; });
         const mergedSizeColors = { ...existingSizeColors, ...sizeColors };
-        const updateData = { buyPrice, sellPrice, pageName, sizes: mergedSizes, sizeColors: mergedSizeColors };
+        const mergedVariations = { ...existingVariations };
+        const generatedPurchaseBarcodes = new Set();
+        Object.entries(variations).forEach(([key, v]) => {
+            let barcode = mergedVariations[key]?.barcode || this._generateBarcode(targetId, key);
+            while (generatedPurchaseBarcodes.has(barcode)) barcode = this._generateBarcode(targetId, key);
+            generatedPurchaseBarcodes.add(barcode);
+            mergedVariations[key] = {
+                ...mergedVariations[key],
+                ...v,
+                barcode
+            };
+        });
+        const updateData = { buyPrice, sellPrice, pageName, sizes: mergedSizes, sizeColors: mergedSizeColors, variations: mergedVariations };
 
         if (manualBarcode && !existingId) updateData.barcode = manualBarcode;
         await update(ref(db, `jawaher_warehouse/${targetId}`), updateData);
@@ -3069,19 +3296,11 @@ updateRetSizes(itemIdx) {
 
         const updates = {};
 
-        // 1. إرجاع الكمية للمستودع
-        if (returnedItem.itemId && this.warehouse[returnedItem.itemId]) {
-            const wItem = this.warehouse[returnedItem.itemId];
-            let keyToReturn = size;
-            
-            // الحماية لضمان توافق المفاتيح إذا كان المقاس مسجلاً (المقاس - اللون)
-            if (wItem.sizes && wItem.sizes[size] === undefined && returnedItem.itemColor) {
-                if (wItem.sizes[`${size} - ${returnedItem.itemColor}`] !== undefined) {
-                    keyToReturn = `${size} - ${returnedItem.itemColor}`;
-                }
-            }
-            const currentStock = wItem.sizes?.[keyToReturn] || 0;
-            updates[`jawaher_warehouse/${returnedItem.itemId}/sizes/${keyToReturn}`] = currentStock + qty;
+        // 1. إرجاع الكمية للمستودع فقط إذا كانت مخصومة مسبقاً
+        if (o.stockDeducted) {
+            const plan = this._stockDeltaPlan([{ ...returnedItem, size, exactKey: returnedItem.exactKey || size, qty }], 'return');
+            if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+            Object.assign(updates, plan.updates);
         }
 
         // 2. تسجيل المرتجع الجديد
@@ -3115,8 +3334,10 @@ updateRetSizes(itemIdx) {
         // إذا تم إرجاع كل الأصناف، نغير الحالة لملغي (canceled)، وإلا نتركه مؤجل
         if (finalItems.length === 0) {
             updates[`jawaher_orders/${orderId}/status`] = 'canceled';
+            updates[`jawaher_orders/${orderId}/stockDeducted`] = false;
         } else {
-            updates[`jawaher_orders/${orderId}/status`] = 'postponed'; 
+            updates[`jawaher_orders/${orderId}/status`] = 'postponed';
+            updates[`jawaher_orders/${orderId}/stockDeducted`] = !!o.stockDeducted;
         }
 
         // إرسال التحديثات دفعة واحدة للفايربيس
@@ -3640,9 +3861,7 @@ updateRetSizes(itemIdx) {
         const newSize = document.getElementById('icNewSize')?.value.trim();
         const color   = document.getElementById('icColor')?.value.trim();
         const realQty = parseInt(document.getElementById('icRealQty')?.value);
-        const barcode = document.getElementById('icBarcode')?.value.trim().toUpperCase()
-                        || item.barcode
-                        || ('JW' + Math.random().toString(36).substr(2,6).toUpperCase());
+        const typedBarcode = document.getElementById('icBarcode')?.value.trim().toUpperCase() || '';
         const reason  = document.getElementById('icReason')?.value || 'تصحيح جرد دوري';
         const notes   = document.getElementById('icNotes')?.value.trim() || '';
 
@@ -3653,6 +3872,9 @@ updateRetSizes(itemIdx) {
         const key = `${newSize} - ${color}`;
         const currentQty = item.sizes?.[key] ?? item.sizes?.[newSize] ?? 0;
         const delta = realQty - currentQty;
+        const isExistingVariation = Object.prototype.hasOwnProperty.call(item.variations || {}, key);
+        const barcode = typedBarcode || (isExistingVariation ? item.variations[key]?.barcode : '') || this._generateBarcode(itemId, key);
+        if (typedBarcode && this._barcodeExists(typedBarcode, itemId, key)) { this.toast(`Ø§Ù„Ø¨Ø§Ø±ÙƒÙˆØ¯ ${typedBarcode} Ù…Ø³ØªØ®Ø¯Ù… Ù…Ø³Ø¨Ù‚Ø§Ù‹`, 'error'); return; }
 
         if (delta === 0) {
             this.toast('الكمية الفعلية مطابقة للمخزون — لا حاجة لتصحيح', 'info');
@@ -4448,6 +4670,8 @@ updateRetSizes(itemIdx) {
                 items.push({ itemId: found[0], itemName: found[1].name, itemColor: finalColor, size: finalSize, exactKey: sizeCombo, qty });
             }
             if (items.length === 0) { this._wizErr('أضف منتجاً واحداً على الأقل'); return; }
+            const stockPlan = this._stockDeltaPlan(items, 'deduct');
+            if (!stockPlan.ok) { this._wizErr(stockPlan.message); return; }
             this._wiz.collectedItems = items;
             // سعر تلقائي: مجموع sellPrice × qty لكل الأصناف + 3 دينار توصيل
             if (!this._wiz.price || this._wiz.price === '') {
@@ -4501,6 +4725,9 @@ updateRetSizes(itemIdx) {
             weightKg: w.weightKg || '',
             lengthCm: w.lengthCm || '',
         };
+
+        const stockPlan = this._stockDeltaPlan(items, 'deduct');
+        if (!stockPlan.ok) { this._wizErr(stockPlan.message); return; }
 
         const btn = document.getElementById('wiz-nav')?.querySelector('button:last-child');
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ الحفظ...'; }
@@ -4965,15 +5192,10 @@ updateRetSizes(itemIdx) {
         }
         if (!items.length) { this.toast('أضف صنفاً واحداً على الأقل', 'error'); return; }
 
-        // update warehouse
-        const updates = {};
-        for (const it of items) {
-            const wItem = this.warehouse[it.itemId]; if (!wItem) continue;
-            let key = it.exactKey || it.size;
-            const current = wItem.sizes?.[key] || 0;
-            const newQty = type === 'in' ? current + it.qty : Math.max(0, current - it.qty);
-            updates[`jawaher_warehouse/${it.itemId}/sizes/${key}`] = newQty;
-        }
+        // update warehouse with aggregated, validated movements
+        const plan = this._stockDeltaPlan(items, type === 'in' ? 'return' : 'deduct');
+        if (!plan.ok) { this.toast(plan.message, 'error'); return; }
+        const updates = { ...plan.updates };
 
         // save transfer record
         const payload = {

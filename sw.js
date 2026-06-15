@@ -3,7 +3,7 @@
 // Network-First | Auto-Update on every deploy
 // ============================================================
 
-const CACHE_NAME = 'shm-cache-v3';
+const CACHE_NAME = 'shm-cache-v4';
 
 const SHELL = [
     './',
@@ -13,6 +13,8 @@ const SHELL = [
     './style-shm.css',
     './constants.js',
     './firebase-config.js',
+    './SHM.png',
+    './version.json',
 ];
 
 // ── Install: skipWaiting فوري بدون انتظار ──────────────────

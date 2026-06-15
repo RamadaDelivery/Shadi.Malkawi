@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>مؤسسة شادي الملكاوي - نظام إدارة المبيعات والمستودع</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/RamadaDelivery/ShadiMalkawi/refs/heads/main/SHM.png" type="image/png">
+    <link rel="icon" href="SHM.png" type="image/png">
 
     <!-- ── Fonts & Icons ──────────────────────────────────── -->
     <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
@@ -45,7 +45,7 @@
         <div class="intro-grid"></div>
         <div class="intro-diamond-wrap">
             <div class="intro-diamond-ring"></div>
-            <img src="https://raw.githubusercontent.com/RamadaDelivery/ShadiMalkawi/refs/heads/main/SHM.png"
+            <img src="SHM.png"
                  alt="Ramada Delivery" style="width:90px;height:90px;object-fit:contain;border-radius:50%;box-shadow:0 0 30px rgba(255,255,255,.3);animation:pulse 2s ease-in-out infinite">
         </div>
         <div class="intro-brand">
@@ -141,7 +141,7 @@
         <div class="topbar">
             <div class="brand-logo">
                 <div class="brand-gem" style="background:transparent;padding:0;overflow:hidden">
-                    <img src="https://raw.githubusercontent.com/RamadaDelivery/ShadiMalkawi/refs/heads/main/SHM.png"
+                    <img src="SHM.png"
                          alt="SHM" style="width:38px;height:38px;object-fit:contain;border-radius:50%">
                 </div>
                 <div>
@@ -192,6 +192,13 @@
                 <div class="page-header">
                     <h1 class="page-title">لوحة القيادة</h1>
                     <p class="page-subtitle" id="dashDate">اليوم</p>
+                </div>
+                <div class="ops-hero">
+                    <div>
+                        <div class="ops-eyebrow"><i class="fas fa-sparkles"></i> مركز التحكم التشغيلي</div>
+                        <h2>نظرة فورية على الطلبات، الإيراد، والمخزون</h2>
+                    </div>
+                    <div class="ops-health-grid" id="opsHealth"></div>
                 </div>
                 <div class="kpi-grid" id="kpiGrid"></div>
                 <div class="row g-3">
@@ -1143,6 +1150,11 @@
             <button class="nav-btn admin-only" data-page="purchase"    onclick="app.gotoPage('purchase')"   ><i class="fas fa-shopping-cart"></i><span>مشتريات</span></button>
             <button class="nav-btn admin-only" data-page="returns"     onclick="app.gotoPage('returns')"    ><i class="fas fa-undo-alt"></i>     <span>مرتجع</span></button>
             <button class="nav-btn admin-only" data-page="definitions" onclick="app.gotoPage('definitions')"><i class="fas fa-cog"></i>          <span>تعريفات</span></button>
+            <button class="nav-btn admin-only" data-page="customers" onclick="app.gotoPage('customers')"><i class="fas fa-users"></i>        <span>عملاء</span></button>
+            <button class="nav-btn admin-only" data-page="users" onclick="app.gotoPage('users')"><i class="fas fa-user-shield"></i>  <span>مستخدمون</span></button>
+            <button class="nav-btn admin-only" data-page="transfer" onclick="app.gotoPage('transfer')"><i class="fas fa-exchange-alt"></i><span>تحويل</span></button>
+            <button class="nav-btn admin-only" data-page="logs" onclick="app.gotoPage('logs')"><i class="fas fa-history"></i><span>السجل</span></button>
+            <button class="nav-btn admin-only" data-page="audit" onclick="app.gotoPage('audit')"><i class="fas fa-file-contract"></i><span>تدقيق</span></button>
         </div>
 
     </div><!-- /appContainer -->

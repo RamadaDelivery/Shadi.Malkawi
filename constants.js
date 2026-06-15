@@ -3,11 +3,11 @@
 // ============================================================
 
 export const USERS = {
-    admin:    { pass: '2026', role: 'Admin',    name: 'المدير العام' },
-    basel:    { pass: '2026', role: 'Admin',    name: 'باسل'          },
-    user:     { pass: '1234', role: 'User',     name: 'موظف إدخال'   },
-    shadi:     { pass: '123456', role: 'User',     name: 'موظف إدخال'   },
-    delivery: { pass: 'del',  role: 'Delivery', name: 'عامل التوصيل' }
+    admin:    { passHash: '158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab', role: 'Admin',    name: 'المدير العام' },
+    basel:    { passHash: '158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab', role: 'Admin',    name: 'باسل'          },
+    user:     { passHash: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', role: 'User',     name: 'موظف إدخال'   },
+    shadi:     { passHash: '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', role: 'User',     name: 'موظف إدخال'   },
+    delivery: { passHash: '75e3090289e2955dfaecfe21eabbe80b7146ab62339454a3dcd1a0ca53111381',  role: 'Delivery', name: 'عامل التوصيل' }
 };
 
 export const STATUS_AR = {
