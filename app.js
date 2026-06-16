@@ -1885,30 +1885,242 @@ addItemRow() {
 
     openAddItemToOrder(orderId) {
         document.getElementById('addItemToOrderModal')?.remove();
+
         const modal = document.createElement('div');
-        modal.id = 'addItemToOrderModal'; modal.className = 'modal-j open';
+        modal.id = 'addItemToOrderModal';
+        modal.className = 'modal-j open add-item-modal-fullscreen';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.style.cssText = `display:flex!important;align-items:stretch!important;justify-content:center!important;z-index:99999!important;position:fixed!important;inset:0!important;`;
+
         modal.innerHTML = `
-        <div class="modal-overlay" onclick="document.getElementById('addItemToOrderModal').remove()"></div>
-        <div class="modal-sheet order-add-fullsheet">
-            <div class="order-add-header">
+        <style>
+            #addItemToOrderModal,
+            #addItemToOrderModal.modal-j.open {
+                display:flex !important;
+                position:fixed !important;
+                inset:0 !important;
+                width:100vw !important;
+                height:100dvh !important;
+                align-items:stretch !important;
+                justify-content:center !important;
+                z-index:99999 !important;
+                padding:0 !important;
+            }
+            #addItemToOrderModal .modal-overlay {
+                position:fixed !important;
+                inset:0 !important;
+                background:rgba(10,16,32,.78) !important;
+                backdrop-filter:blur(6px) !important;
+            }
+            #addItemToOrderModal .order-add-fullscreen-sheet {
+                position:relative !important;
+                z-index:1 !important;
+                width:min(1180px,100vw) !important;
+                height:100dvh !important;
+                max-width:none !important;
+                max-height:none !important;
+                margin:0 auto !important;
+                padding:0 !important;
+                border-radius:0 !important;
+                background:var(--paper) !important;
+                box-shadow:0 0 0 1px var(--border), 0 26px 90px rgba(0,0,0,.30) !important;
+                display:flex !important;
+                flex-direction:column !important;
+                overflow:hidden !important;
+                animation:none !important;
+            }
+            #addItemToOrderModal .order-add-fullscreen-header {
+                flex:0 0 auto !important;
+                display:flex !important;
+                align-items:center !important;
+                justify-content:space-between !important;
+                gap:1rem !important;
+                padding:1rem 1.25rem !important;
+                background:linear-gradient(180deg,var(--paper),var(--paper-warm)) !important;
+                border-bottom:1px solid var(--border) !important;
+            }
+            #addItemToOrderModal .order-add-fullscreen-title {
+                margin:0 !important;
+                font-size:1.22rem !important;
+                font-weight:900 !important;
+                color:var(--ink) !important;
+                display:flex !important;
+                align-items:center !important;
+                gap:.45rem !important;
+            }
+            #addItemToOrderModal .order-add-fullscreen-subtitle {
+                margin:.28rem 0 0 !important;
+                color:var(--ink-mid) !important;
+                font-size:.86rem !important;
+                font-weight:600 !important;
+            }
+            #addItemToOrderModal .order-add-fullscreen-body {
+                flex:1 1 auto !important;
+                min-height:0 !important;
+                overflow-y:auto !important;
+                padding:1.15rem 1.25rem 1.35rem !important;
+                background:var(--paper) !important;
+            }
+            #addItemToOrderModal .order-add-fullscreen-footer {
+                flex:0 0 auto !important;
+                display:flex !important;
+                align-items:center !important;
+                gap:.75rem !important;
+                padding:1rem 1.25rem calc(1rem + env(safe-area-inset-bottom)) !important;
+                background:var(--paper) !important;
+                border-top:1px solid var(--border) !important;
+                box-shadow:0 -10px 28px rgba(10,16,32,.08) !important;
+            }
+            #addItemToOrderModal #eItemsList {
+                display:block !important;
+                width:100% !important;
+            }
+            #addItemToOrderModal .item-row-card {
+                padding:1rem !important;
+                margin-bottom:1rem !important;
+                border-radius:18px !important;
+                background:var(--paper-warm) !important;
+                border:1.5px solid var(--border) !important;
+                border-right:4px solid var(--gold) !important;
+                box-shadow:0 8px 24px rgba(10,16,32,.05) !important;
+            }
+            #addItemToOrderModal .item-row-header {
+                margin-bottom:.85rem !important;
+            }
+            #addItemToOrderModal .item-row-fields {
+                display:grid !important;
+                grid-template-columns:minmax(260px,2fr) minmax(190px,1.15fr) minmax(180px,1.05fr) minmax(150px,.75fr) !important;
+                gap:.9rem !important;
+                align-items:start !important;
+            }
+            #addItemToOrderModal .item-row-product,
+            #addItemToOrderModal .item-row-color,
+            #addItemToOrderModal .item-row-size,
+            #addItemToOrderModal .item-row-qty {
+                grid-column:auto !important;
+                min-width:0 !important;
+            }
+            #addItemToOrderModal .form-label-j {
+                font-size:.82rem !important;
+                font-weight:900 !important;
+                margin-bottom:.4rem !important;
+                color:var(--ink) !important;
+            }
+            #addItemToOrderModal .form-control-j,
+            #addItemToOrderModal .select-j,
+            #addItemToOrderModal .qty-btn,
+            #addItemToOrderModal [id^="ir_color_btn_"] {
+                min-height:50px !important;
+            }
+            #addItemToOrderModal .form-control-j,
+            #addItemToOrderModal .select-j {
+                font-size:1rem !important;
+                border-radius:14px !important;
+            }
+            #addItemToOrderModal .item-row-color [id^="ir_color_preview_"] {
+                min-height:50px !important;
+                border-radius:14px !important;
+                padding:.65rem .8rem !important;
+                background:var(--paper) !important;
+            }
+            #addItemToOrderModal .item-row-qty .qty-control {
+                width:100% !important;
+                justify-content:stretch !important;
+                gap:.45rem !important;
+            }
+            #addItemToOrderModal .item-row-qty .qty-btn {
+                width:46px !important;
+                height:50px !important;
+                border-radius:14px !important;
+            }
+            #addItemToOrderModal .item-row-qty .qty-input {
+                flex:1 1 auto !important;
+                width:100% !important;
+                min-width:64px !important;
+                height:50px !important;
+                font-size:1.05rem !important;
+            }
+            #addItemToOrderModal .add-item-row-btn {
+                min-height:52px !important;
+                border-radius:16px !important;
+                font-size:.98rem !important;
+                margin-top:.25rem !important;
+            }
+            @media (max-width: 760px) {
+                #addItemToOrderModal .order-add-fullscreen-sheet {
+                    width:100vw !important;
+                    height:100dvh !important;
+                    margin:0 !important;
+                }
+                #addItemToOrderModal .order-add-fullscreen-header {
+                    padding:.9rem .95rem !important;
+                }
+                #addItemToOrderModal .order-add-fullscreen-title {
+                    font-size:1.05rem !important;
+                }
+                #addItemToOrderModal .order-add-fullscreen-subtitle {
+                    display:none !important;
+                }
+                #addItemToOrderModal .order-add-fullscreen-body {
+                    padding:.85rem .85rem 1rem !important;
+                }
+                #addItemToOrderModal .item-row-card {
+                    padding:.9rem !important;
+                    border-radius:16px !important;
+                }
+                #addItemToOrderModal .item-row-fields {
+                    grid-template-columns:1fr !important;
+                    gap:.85rem !important;
+                }
+                #addItemToOrderModal .item-row-product,
+                #addItemToOrderModal .item-row-color,
+                #addItemToOrderModal .item-row-size,
+                #addItemToOrderModal .item-row-qty {
+                    grid-column:1 / -1 !important;
+                    width:100% !important;
+                }
+                #addItemToOrderModal .order-add-fullscreen-footer {
+                    padding:.75rem .85rem calc(.75rem + env(safe-area-inset-bottom)) !important;
+                    flex-direction:column !important;
+                }
+                #addItemToOrderModal .order-add-fullscreen-footer .btn-j {
+                    width:100% !important;
+                    justify-content:center !important;
+                    min-height:52px !important;
+                }
+            }
+        </style>
+        <div class="modal-overlay" onclick="document.getElementById('addItemToOrderModal')?.remove()"></div>
+        <div class="order-add-fullscreen-sheet">
+            <div class="order-add-fullscreen-header">
                 <div>
-                    <div class="modal-title order-add-title"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> إضافة أصناف للطلب</div>
-                    <div class="order-add-subtitle">اختر المنتج، اللون، المقاس والكمية ضمن مساحة كاملة قابلة للتعامل على الموبايل واللابتوب.</div>
+                    <h2 class="order-add-fullscreen-title"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> إضافة أصناف للطلب - شاشة كاملة</h2>
+                    <p class="order-add-fullscreen-subtitle">مساحة موسعة لاختيار المنتج، اللون، المقاس والكمية بدون ضغط أو تداخل.</p>
                 </div>
-                <button class="btn-j btn-ghost btn-sm-j" onclick="document.getElementById('addItemToOrderModal').remove()"><i class="fas fa-times"></i> إغلاق</button>
+                <button class="btn-j btn-ghost btn-sm-j" onclick="document.getElementById('addItemToOrderModal')?.remove()"><i class="fas fa-times"></i> إغلاق</button>
             </div>
-            <div class="order-add-body">
-                <div id="addItemRows"><div id="eItemsList" style="display:block"></div></div>
+            <div class="order-add-fullscreen-body">
+                <div id="addItemRows"><div id="eItemsList"></div></div>
                 <button class="add-item-row-btn mt-2" onclick="app.addItemRow()"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> صنف آخر</button>
             </div>
-            <div class="order-add-footer">
+            <div class="order-add-fullscreen-footer">
                 <button class="btn-j btn-gold flex-fill" onclick="app._confirmAddItemsToOrder('${orderId}')">
                     <i class="fas fa-save"></i> حفظ وإضافة للطلب
                 </button>
-                <button class="btn-j btn-ghost" onclick="document.getElementById('addItemToOrderModal').remove()">إلغاء</button>
+                <button class="btn-j btn-ghost" onclick="document.getElementById('addItemToOrderModal')?.remove()">إلغاء</button>
             </div>
         </div>`;
+
         document.body.appendChild(modal);
+        document.body.classList.add('add-item-modal-open');
+        modal.addEventListener('remove', () => document.body.classList.remove('add-item-modal-open'));
+        const cleanup = () => document.body.classList.remove('add-item-modal-open');
+        const observer = new MutationObserver(() => {
+            if (!document.body.contains(modal)) { cleanup(); observer.disconnect(); }
+        });
+        observer.observe(document.body, { childList: true });
+
         this.itemRows = [{ id: Date.now() }];
         this.renderItemRows();
     },

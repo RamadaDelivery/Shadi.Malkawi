@@ -3,7 +3,7 @@
 // Network-First | Auto-Update on every deploy
 // ============================================================
 
-const CACHE_NAME = 'shm-cache-v4';
+const CACHE_NAME = 'shm-cache-v6-popup-fullscreen';
 
 const SHELL = [
     './',
