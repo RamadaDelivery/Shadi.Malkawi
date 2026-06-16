@@ -35,6 +35,7 @@ window.app = {
     _listenersStarted: false,
     auditData: {},
     customColors: [],   // ألوان مخصصة من Firebase تُضاف لـ COLORS_AR
+    _policyBarcodeReserve: new Set(),
 
     // ── Simple hash (SHA-256 via SubtleCrypto) ───────────────
     async _hash(str) {
@@ -54,22 +55,55 @@ window.app = {
         const clean = (code || '').trim().toUpperCase();
         if (!clean) return false;
         return Object.entries(this.warehouse || {}).some(([id, w]) => {
-            if (id !== ignoreItemId && (w.barcode || '').toUpperCase() === clean) return true;
+            const sameItem = id === ignoreItemId;
+            const ignoreMain = sameItem && (ignoreVarKey === null || ignoreVarKey === undefined || ignoreVarKey === '');
+            if (!ignoreMain && (w.barcode || '').toUpperCase() === clean) return true;
             return Object.entries(w.variations || {}).some(([key, v]) => {
-                if (id === ignoreItemId && key === ignoreVarKey) return false;
+                if (sameItem && key === ignoreVarKey) return false;
                 return (v.barcode || '').toUpperCase() === clean;
             });
         });
     },
 
-    _generateBarcode(ignoreItemId = null, ignoreVarKey = null) {
-        let code = '';
-        do {
-            const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
-            const timePart = Date.now().toString(36).slice(-4).toUpperCase();
-            code = `JW${timePart}${randomPart}`.slice(0, 12);
-        } while (this._barcodeExists(code, ignoreItemId, ignoreVarKey));
-        return code;
+    _generateBarcode(ignoreItemId = null, ignoreVarKey = null, reserved = new Set()) {
+        const reservedSet = reserved instanceof Set ? reserved : new Set(reserved || []);
+        for (let attempt = 0; attempt < 12000; attempt++) {
+            const randomPart = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+            const code = `00${randomPart}`;
+            if (!reservedSet.has(code) && !this._barcodeExists(code, ignoreItemId, ignoreVarKey)) return code;
+        }
+        throw new Error('لا يوجد باركود متاح بصيغة 00 + 4 أرقام. راجع الباركودات المكررة أو وسّع النطاق.');
+    },
+
+    _policyBarcodeExists(code, ignoreOrderId = null) {
+        const clean = (code || '').trim().toUpperCase();
+        if (!clean) return false;
+        return Object.entries(this.orders || {}).some(([id, o]) => {
+            if (id === ignoreOrderId) return false;
+            return (o.policyBarcode || o.waybillBarcode || '').toString().trim().toUpperCase() === clean;
+        });
+    },
+
+    _legacyPolicyBarcode(id) {
+        return String(id || '').slice(-12).toUpperCase();
+    },
+
+    _generatePolicyBarcode(ignoreOrderId = null) {
+        if (!(this._policyBarcodeReserve instanceof Set)) this._policyBarcodeReserve = new Set();
+        for (let attempt = 0; attempt < 12000; attempt++) {
+            const randomPart = String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
+            const code = `98${randomPart}`;
+            if (!this._policyBarcodeReserve.has(code) && !this._policyBarcodeExists(code, ignoreOrderId)) {
+                this._policyBarcodeReserve.add(code);
+                return code;
+            }
+        }
+        throw new Error('تعذر إنشاء باركود بوليصة فريد.');
+    },
+
+    _orderPolicyBarcode(id, order = null) {
+        const saved = (order?.policyBarcode || order?.waybillBarcode || '').toString().trim().toUpperCase();
+        return saved || this._legacyPolicyBarcode(id);
     },
 
     // ============ LOGIN ============
@@ -1480,8 +1514,11 @@ addItemRow() {
         const stockPlan = this._stockDeltaPlan(items, 'deduct');
         if (!stockPlan.ok) { this.toast(stockPlan.message, 'error'); return; }
 
+        const policyBarcode = this._generatePolicyBarcode();
         const payload = {
             timestamp: Date.now(),
+            policyBarcode,
+            waybillBarcode: policyBarcode,
             date: document.getElementById('eDate')?.value || new Date().toLocaleDateString('en-GB'),
             custName, custMob: '07' + mob, country: 'الأردن', governorate: gov, custAddr: addr,
             ...this._itemRowsFirstItemPatch(items),
@@ -1852,12 +1889,19 @@ addItemRow() {
         modal.id = 'addItemToOrderModal'; modal.className = 'modal-j open';
         modal.innerHTML = `
         <div class="modal-overlay" onclick="document.getElementById('addItemToOrderModal').remove()"></div>
-        <div class="modal-sheet" style="max-width:480px">
-            <div class="modal-handle"></div>
-            <div class="modal-title"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> إضافة صنف للطلب</div>
-            <div id="addItemRows"><div id="eItemsList" style="display:block"></div></div>
-            <button class="add-item-row-btn mt-2" onclick="app.addItemRow()"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> صنف آخر</button>
-            <div class="d-flex gap-3 mt-4">
+        <div class="modal-sheet order-add-fullsheet">
+            <div class="order-add-header">
+                <div>
+                    <div class="modal-title order-add-title"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> إضافة أصناف للطلب</div>
+                    <div class="order-add-subtitle">اختر المنتج، اللون، المقاس والكمية ضمن مساحة كاملة قابلة للتعامل على الموبايل واللابتوب.</div>
+                </div>
+                <button class="btn-j btn-ghost btn-sm-j" onclick="document.getElementById('addItemToOrderModal').remove()"><i class="fas fa-times"></i> إغلاق</button>
+            </div>
+            <div class="order-add-body">
+                <div id="addItemRows"><div id="eItemsList" style="display:block"></div></div>
+                <button class="add-item-row-btn mt-2" onclick="app.addItemRow()"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> صنف آخر</button>
+            </div>
+            <div class="order-add-footer">
                 <button class="btn-j btn-gold flex-fill" onclick="app._confirmAddItemsToOrder('${orderId}')">
                     <i class="fas fa-save"></i> حفظ وإضافة للطلب
                 </button>
@@ -2144,7 +2188,7 @@ async deductStock(orderId) {
                 size: o.size, qty: o.qty
             }];
             const bcId  = `bc${idx}`;
-            const bcVal = id.slice(-12).toUpperCase();
+            const bcVal = this._orderPolicyBarcode(id, o);
 
             let sellPrice = '';
             // sellPrice removed from label per request — only total price shown
@@ -2189,7 +2233,7 @@ async deductStock(orderId) {
         <div class="lwarn">⚠ يُمنع فتح الطرد</div>
       </div>
     </div>
-    <div class="lbc"><svg id="${bcId}"></svg></div>
+    <div class="lbc"><span class="lbc-code" dir="ltr">${bcVal}</span><svg id="${bcId}"></svg></div>
   </div>
 </div>`;
             return { html, bcId, bcVal };
@@ -2232,7 +2276,8 @@ body { margin: 0 }
 .lnotes { font-size:7pt; white-space:normal; line-height:1.2 }
 .lwarn  { background:#FFF0F0; border:1.5px solid #C02525; border-radius:3px; padding:2px 4px; font-size:7.5pt; font-weight:800; color:#C02525; text-align:center; flex-shrink:0; margin-top:auto }
 .lbc    { text-align:center; padding:1px 4px 2px; border-top:1px solid #dde; flex-shrink:0; background:#fff; display:flex; align-items:center; justify-content:center; gap:6px }
-.lbc svg { max-width:100%; height:auto !important }
+.lbc-code { font-size:8pt; font-weight:800; color:#111; letter-spacing:.8px; border:1px solid #dde; border-radius:3px; padding:1px 4px; background:#f8f8f8 }
+.lbc svg { max-width:100%; height:auto !important; flex:1 }
 .lbc-price { font-size:9pt; font-weight:800; color:#1A6B4A; white-space:nowrap; border:1.5px solid #1A6B4A; border-radius:4px; padding:1px 6px; background:#e6f4ed }`;
 
         // الطباعة: نرسم كل الباركودات أولاً ثم نطبع بعد تأخير كافٍ
@@ -2252,7 +2297,7 @@ ${labelsHtml}
       try {
         JsBarcode('#' + barcodes[i].id, barcodes[i].val, {
           format: 'CODE128', width: 1.3, height: 26,
-          displayValue: true, fontSize: 10, margin: 2, background: 'transparent',
+          displayValue: false, fontSize: 10, margin: 2, background: 'transparent',
           textAlign: 'center', font: 'Almarai'
         });
         // Force LTR on the barcode SVG text
@@ -2292,7 +2337,13 @@ ${labelsHtml}
         return Object.entries(this.orders).filter(([id, o]) => {
             // ── Data-level restriction: User sees only their orders ──
             if (isUserOnly && o.entryUser !== this.userName) return false;
-            if (q && !((o.custName || '').toLowerCase().includes(q) || (o.custMob || '').includes(q) || id.includes(q))) return false;
+            if (q && !(
+                (o.custName || '').toLowerCase().includes(q)
+                || (o.custMob || '').includes(q)
+                || id.toLowerCase().includes(q)
+                || this._orderPolicyBarcode(id, o).toLowerCase().includes(q)
+                || this._itemsOf(o).some(x => (x.itemName || '').toLowerCase().includes(q))
+            )) return false;
             if (st && o.status !== st) return false;
             if (it && !this._itemsOf(o).some(x => x.itemName === it)) return false;
             if (pg && o.pageName !== pg) return false;
@@ -2647,11 +2698,10 @@ ${labelsHtml}
                 return;
             }
             if (!sz) continue;
-            if (!b) b = this._generateBarcode();
-            if (usedBarcodes.has(b)) { this.toast(`Ø§Ù„Ø¨Ø§Ø±ÙƒÙˆØ¯ ${b} Ù…ÙƒØ±Ø± ÙÙŠ Ù†ÙØ³ Ø§Ù„Ù…Ù†ØªØ¬`, 'error'); return; }
+            if (!b) b = this._generateBarcode(null, null, usedBarcodes);
+            if (usedBarcodes.has(b)) { this.toast(`الباركود ${b} مكرر في نفس المنتج`, 'error'); return; }
+            if (this._barcodeExists(b)) { this.toast(`الباركود ${b} مستخدم مسبقاً`, 'error'); return; }
             usedBarcodes.add(b);
-            const existing = Object.values(this.warehouse).find(w => w.barcode === b || (w.variations && Object.values(w.variations).some(v => v.barcode === b)));
-            if (existing) { this.toast(`الباركود ${b} مستخدم مسبقاً`, 'error'); return; }
             const key = c ? `${sz} - ${c}` : sz;
             sizes[key] = (sizes[key] || 0) + qty;
             variations[key] = { size: sz, color: c, hex, barcode: b };
@@ -2955,13 +3005,8 @@ ${labelsHtml}
         if (val === null) return;
         const clean = val.trim().toUpperCase();
         if (!clean) { this.toast('الباركود لا يمكن أن يكون فارغاً', 'error'); return; }
-        // فحص التكرار (تجاهل نفس الصنف)
-        const dup = Object.entries(this.warehouse).find(([id, w]) => {
-            if (id === itemId) return false;
-            if (w.barcode === clean) return true;
-            return Object.values(w.variations || {}).some(v => v.barcode === clean);
-        });
-        if (dup) { this.toast(`الباركود ${clean} مستخدم في صنف آخر`, 'error'); return; }
+        // فحص التكرار مع تجاهل نفس الباركود الجاري تعديله فقط
+        if (this._barcodeExists(clean, itemId, varKey || null)) { this.toast(`الباركود ${clean} مستخدم مسبقاً`, 'error'); return; }
         const path = varKey
             ? `jawaher_warehouse/${itemId}/variations/${varKey}/barcode`
             : `jawaher_warehouse/${itemId}/barcode`;
@@ -3240,10 +3285,11 @@ for (const row of this.pSizeData) {
 
         let targetId = existingId;
         let isNewItem = false;
+        let mainBarcodeForNewItem = manualBarcode || '';
         if (!targetId) {
             isNewItem = true;
-            const barcode = manualBarcode || this._generateBarcode();
-            const newRef = await push(warehouseRef, { name: newName, buyPrice, sellPrice, pageName, color, barcode, sizes: {}, sizeColors: {}, createdAt: Date.now() });
+            mainBarcodeForNewItem = manualBarcode || this._generateBarcode();
+            const newRef = await push(warehouseRef, { name: newName, buyPrice, sellPrice, pageName, color, barcode: mainBarcodeForNewItem, sizes: {}, sizeColors: {}, createdAt: Date.now() });
             targetId = newRef.key;
         }
         // للمنتج الجديد: الكاش المحلي لم يُحدَّث بعد، نبني البيانات من الجلسة الحالية
@@ -3255,10 +3301,10 @@ for (const row of this.pSizeData) {
         Object.entries(sizes).forEach(([s, q]) => { mergedSizes[s] = (mergedSizes[s] || 0) + q; });
         const mergedSizeColors = { ...existingSizeColors, ...sizeColors };
         const mergedVariations = { ...existingVariations };
-        const generatedPurchaseBarcodes = new Set();
+        const generatedPurchaseBarcodes = new Set(mainBarcodeForNewItem ? [mainBarcodeForNewItem] : []);
         Object.entries(variations).forEach(([key, v]) => {
-            let barcode = mergedVariations[key]?.barcode || this._generateBarcode(targetId, key);
-            while (generatedPurchaseBarcodes.has(barcode)) barcode = this._generateBarcode(targetId, key);
+            let barcode = mergedVariations[key]?.barcode || this._generateBarcode(targetId, key, generatedPurchaseBarcodes);
+            while (generatedPurchaseBarcodes.has(barcode)) barcode = this._generateBarcode(targetId, key, generatedPurchaseBarcodes);
             generatedPurchaseBarcodes.add(barcode);
             mergedVariations[key] = {
                 ...mergedVariations[key],
@@ -3314,11 +3360,14 @@ for (const row of this.pSizeData) {
     scanReturnBarcode() {
         const code = document.getElementById('retBarcodeScanner').value.trim().toUpperCase();
         if (!code) return;
-        const found = Object.entries(this.orders).find(([id]) => id.slice(-12).toUpperCase().includes(code) || id.slice(-8).toUpperCase() === code);
+        const found = Object.entries(this.orders).find(([id, o]) => {
+            const policy = this._orderPolicyBarcode(id, o);
+            return policy === code || policy.includes(code) || id.slice(-12).toUpperCase().includes(code) || id.slice(-8).toUpperCase() === code;
+        });
         if (found) { this.selectReturnOrder(found[0], found[1]); document.getElementById('retBarcodeScanner').value = ''; this.toast('تم العثور على الطلب', 'success'); return; }
         const itemFound = Object.entries(this.warehouse).find(([, w]) => w.barcode?.toUpperCase() === code || (w.variations && Object.values(w.variations).some(v => v.barcode?.toUpperCase() === code)));
         if (itemFound) {
-            const ordersByItem = Object.entries(this.orders).filter(([, o]) => o.itemId === itemFound[0] && o.status !== 'canceled');
+            const ordersByItem = Object.entries(this.orders).filter(([, o]) => this._itemsOf(o).some(it => it.itemId === itemFound[0]) && o.status !== 'canceled');
             if (ordersByItem.length === 1) this.selectReturnOrder(ordersByItem[0][0], ordersByItem[0][1]);
             else if (ordersByItem.length > 1) this.showReturnResults(ordersByItem);
             else this.toast('لا توجد طلبات لهذا المنتج', 'error');
@@ -3333,7 +3382,11 @@ for (const row of this.pSizeData) {
         this.retSelectedOrderId = null; form.style.display = 'none'; preview.style.display = 'none'; resultsEl.style.display = 'none';
         if (q.length < 2) return;
         const matches = Object.entries(this.orders).filter(([id, o]) =>
-            id.slice(-8).toLowerCase().includes(q) || (o.custName || '').toLowerCase().includes(q) || (o.custMob || '').includes(q) || (o.itemName || '').toLowerCase().includes(q)
+            this._orderPolicyBarcode(id, o).toLowerCase().includes(q)
+            || id.slice(-8).toLowerCase().includes(q)
+            || (o.custName || '').toLowerCase().includes(q)
+            || (o.custMob || '').includes(q)
+            || this._itemsOf(o).some(it => (it.itemName || '').toLowerCase().includes(q))
         ).slice(0, 8);
         if (matches.length === 0) { resultsEl.style.display = 'block'; resultsEl.innerHTML = `<div style="padding:.75rem;font-size:.85rem;color:var(--ink-mid);text-align:center"><i class="fas fa-search-minus"></i> لم يتم العثور على نتائج</div>`; return; }
         if (matches.length === 1) { this.selectReturnOrder(matches[0][0], matches[0][1]); return; }
@@ -4019,7 +4072,7 @@ updateRetSizes(itemIdx) {
         const delta = realQty - currentQty;
         const isExistingVariation = Object.prototype.hasOwnProperty.call(item.variations || {}, key);
         const barcode = typedBarcode || (isExistingVariation ? item.variations[key]?.barcode : '') || this._generateBarcode(itemId, key);
-        if (typedBarcode && this._barcodeExists(typedBarcode, itemId, key)) { this.toast(`Ø§Ù„Ø¨Ø§Ø±ÙƒÙˆØ¯ ${typedBarcode} Ù…Ø³ØªØ®Ø¯Ù… Ù…Ø³Ø¨Ù‚Ø§Ù‹`, 'error'); return; }
+        if (typedBarcode && this._barcodeExists(typedBarcode, itemId, key)) { this.toast(`الباركود ${typedBarcode} مستخدم مسبقاً`, 'error'); return; }
 
         if (delta === 0) {
             this.toast('الكمية الفعلية مطابقة للمخزون — لا حاجة لتصحيح', 'info');
@@ -4844,8 +4897,11 @@ updateRetSizes(itemIdx) {
         if (items.length === 0) { this._wizErr('لا توجد منتجات'); return; }
 
         const entryUser = this.role === 'User' ? this.userName : (w.entryUser || this.userName);
+        const policyBarcode = this._generatePolicyBarcode();
         const payload = {
             timestamp: Date.now(),
+            policyBarcode,
+            waybillBarcode: policyBarcode,
             date: new Date().toLocaleDateString('en-GB'),
             custName: w.custName, custMob: '07' + w.mobile,
             country: 'الأردن', governorate: w.governorate, custAddr: w.addr,
