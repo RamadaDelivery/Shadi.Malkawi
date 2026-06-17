@@ -1062,10 +1062,11 @@
 
                     </div><!-- نهاية الـ main-content بشكل صحيح -->
 
-        <!-- ── Floating Quick Actions ─────────────────────────── -->
-        <button class="delivery-fab" id="deliveryFab" type="button" onclick="app.quickNewDelivery()" aria-label="إضافة طلب توصيل جديد" title="إضافة طلب توصيل جديد">
-            <span class="delivery-fab__icon"><i class="fas fa-plus"></i></span>
-            <span class="delivery-fab__label">طلب جديد</span>
+        <!-- ── Floating Contextual Quick Actions ───────────────── -->
+        <div class="quick-fab-menu" id="quickFabMenu" aria-label="إجراءات سريعة مرتبطة بالصفحة الحالية"></div>
+        <button class="delivery-fab" id="deliveryFab" type="button" onclick="app.handleFabMain()" aria-label="إجراءات سريعة" title="إجراءات سريعة">
+            <span class="delivery-fab__icon"><i class="fas fa-bolt"></i></span>
+            <span class="delivery-fab__label">إجراء سريع</span>
         </button>
         <button class="nav-reveal-pill" id="navRevealPill" type="button" onclick="app.revealNavigation()" aria-label="إظهار شريط التنقل">
             <i class="fas fa-compass"></i>
