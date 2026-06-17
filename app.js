@@ -139,6 +139,7 @@ window.app = {
         document.getElementById('loginUser').value = '';
         document.getElementById('loginPass').value = '';
         app.renderSavedAccounts();
+        app._hydrateRememberedLogin(true);
     },
 
   applyPermissions() {
@@ -285,72 +286,73 @@ window.app = {
         this.renderSavedAccounts();
     },
     toggleRememberMe() {
-        const cb  = document.getElementById('rememberMe');
-        const box = document.getElementById('rememberMeBox');
-        const icon = box.querySelector('i');
-        if (cb.checked) {
-            box.style.background = 'rgba(201,168,76,.2)';
-            box.style.borderColor = '#C9A84C';
-            icon.style.display = 'block';
-        } else {
-            box.style.background = 'rgba(255,255,255,.05)';
-            box.style.borderColor = 'rgba(201,168,76,.4)';
-            icon.style.display = 'none';
-        }
+        const cb = document.getElementById(`rememberMe`);
+        const box = document.getElementById(`rememberMeBox`);
+        if (!cb || !box) return;
+        box.classList.toggle(`is-checked`, cb.checked);
     },
+
+    _hydrateRememberedLogin(force = false) {
+        const rememberedUser = localStorage.getItem(`shmRememberLastUser`);
+        const loginUser = document.getElementById(`loginUser`);
+        const loginPass = document.getElementById(`loginPass`);
+        const remember = document.getElementById(`rememberMe`);
+        if (!loginUser || !loginPass || !remember) return;
+
+        if (!rememberedUser) {
+            remember.checked = false;
+            this.toggleRememberMe();
+            return;
+        }
+
+        const account = this._getSavedAccounts().find(a => a.u === rememberedUser);
+        const savedPassword = this._decodeSavedPassword(account?.p || ``);
+
+        if (force || !loginUser.value) loginUser.value = rememberedUser;
+        if ((force || !loginPass.value) && savedPassword) loginPass.value = savedPassword;
+
+        remember.checked = true;
+        this.toggleRememberMe();
+    },
+
     renderSavedAccounts() {
         const accounts = this._getSavedAccounts();
-        const container = document.getElementById('savedAccountsList');
+        const container = document.getElementById(`savedAccountsList`);
         if (!container) return;
-        if (!accounts.length) { container.style.display = 'none'; return; }
-        container.style.display = 'block';
+        if (!accounts.length) {
+            container.style.display = `none`;
+            container.innerHTML = ``;
+            return;
+        }
+        container.style.display = `block`;
         container.innerHTML = `
-            <div class="auth-muted-label" style="font-size:.78rem;margin-bottom:.5rem;text-align:right;">الحسابات المحفوظة</div>
-            <div style="display:flex;flex-direction:column;gap:.4rem;">
+            <div class="auth-muted-label">الحسابات المحفوظة</div>
+            <div class="saved-accounts-stack">
                 ${accounts.map(a => `
-                    <div class="saved-account-card" style="
-                        display:flex;align-items:center;gap:.6rem;
-                        background:rgba(255,255,255,.09);
-                        border:1px solid rgba(201,168,76,.34);
-                        border-radius:12px;padding:.55rem .9rem;
-                        cursor:pointer;transition:background .2s, border-color .2s, transform .2s;
-                    " onmouseenter="this.style.background='rgba(201,168,76,.16)';this.style.transform='translateY(-1px)'"
-                       onmouseleave="this.style.background='rgba(255,255,255,.09)';this.style.transform='translateY(0)'"
-                       onclick="app.quickLogin('${this._jsArg(a.u)}')">
-                        <div style="
-                            width:32px;height:32px;border-radius:50%;flex-shrink:0;
-                            background:linear-gradient(135deg,#C9A84C,#9A7A2E);
-                            display:flex;align-items:center;justify-content:center;
-                            font-weight:800;font-size:.85rem;color:#1A1A2E;
-                        ">${this._escapeHtml((a.u || '?')[0].toUpperCase())}</div>
-                        <span class="saved-account-name" style="flex:1;color:#fff;font-size:.88rem;font-weight:800;">${this._escapeHtml(a.u)}</span>
-                        ${a.p ? '<span class="saved-account-badge">دخول سريع</span>' : '<span class="saved-account-badge" style="background:rgba(255,255,255,.16);color:#fff;">كلمة مرور مطلوبة</span>'}
-                        <button class="saved-account-action" onclick="event.stopPropagation();app._removeAccount('${this._jsArg(a.u)}')" style="
-                            background:none;border:none;color:rgba(255,255,255,.82);
-                            cursor:pointer;font-size:.8rem;padding:.2rem .4rem;
-                            border-radius:6px;transition:color .2s;
-                        " onmouseenter="this.style.color='#ff8b8b'"
-                           onmouseleave="this.style.color='rgba(255,255,255,.82)'">
+                    <button class="saved-account-card" type="button" onclick="app.quickLogin('${this._jsArg(a.u)}')">
+                        <span class="saved-account-avatar">${this._escapeHtml((a.u || `?`)[0].toUpperCase())}</span>
+                        <span class="saved-account-name">${this._escapeHtml(a.u)}</span>
+                        ${a.p ? `<span class="saved-account-badge">دخول سريع</span>` : `<span class="saved-account-badge saved-account-badge--warning">كلمة مرور مطلوبة</span>`}
+                        <span class="saved-account-action" onclick="event.stopPropagation();app._removeAccount('${this._jsArg(a.u)}')" title="حذف الحساب المحفوظ" aria-label="حذف الحساب المحفوظ">
                             <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                `).join('')}
+                        </span>
+                    </button>
+                `).join(``)}
             </div>
-            <div style="text-align:center;margin-top:.6rem;">
-                <span class="saved-account-other" style="font-size:.75rem;color:rgba(255,255,255,.78);cursor:pointer;"
-                    onclick="app.loginWithOther()">
-                    <i class="fas fa-plus" style="font-size:.65rem;"></i> تسجيل دخول بحساب آخر
-                </span>
-            </div>
+            <button class="saved-account-other" type="button" onclick="app.loginWithOther()">
+                <i class="fas fa-plus"></i>
+                <span>تسجيل دخول بحساب آخر</span>
+            </button>
         `;
     },
+
     async quickLogin(username) {
-        const cleanUser = `${username || ''}`.trim().toLowerCase();
+        const cleanUser = `${username || ``}`.trim().toLowerCase();
         const account = this._getSavedAccounts().find(a => a.u === cleanUser);
-        const password = this._decodeSavedPassword(account?.p || '');
-        document.getElementById('loginUser').value = cleanUser;
-        document.getElementById('loginPass').value = password;
-        const remember = document.getElementById('rememberMe');
+        const password = this._decodeSavedPassword(account?.p || ``);
+        document.getElementById(`loginUser`).value = cleanUser;
+        document.getElementById(`loginPass`).value = password;
+        const remember = document.getElementById(`rememberMe`);
         if (remember && !remember.checked) {
             remember.checked = true;
             this.toggleRememberMe();
@@ -358,20 +360,20 @@ window.app = {
         if (password) {
             await this.login();
         } else {
-            document.getElementById('loginPass').focus();
-            this.toast('أدخل كلمة المرور للمتابعة', 'info');
+            document.getElementById(`loginPass`).focus();
+            this.toast(`أدخل كلمة المرور للمتابعة`, `info`);
         }
     },
 
     loginWithOther() {
-        document.getElementById('loginUser').value = '';
-        document.getElementById('loginPass').value = '';
-        const remember = document.getElementById('rememberMe');
+        document.getElementById(`loginUser`).value = ``;
+        document.getElementById(`loginPass`).value = ``;
+        const remember = document.getElementById(`rememberMe`);
         if (remember?.checked) {
             remember.checked = false;
             this.toggleRememberMe();
         }
-        document.getElementById('loginUser').focus();
+        document.getElementById(`loginUser`).focus();
     },
 
     // ============ DARK MODE ============
@@ -5625,19 +5627,7 @@ document.addEventListener('DOMContentLoaded', () => {
     app.initKeys();
     app.initSmartChrome();
     app.renderSavedAccounts();
-    const rememberedUser = localStorage.getItem('shmRememberLastUser');
-    if (rememberedUser && !saved) {
-        const loginUser = document.getElementById('loginUser');
-        const loginPass = document.getElementById('loginPass');
-        const remember = document.getElementById('rememberMe');
-        const rememberedAccount = app._getSavedAccounts().find(a => a.u === rememberedUser);
-        if (loginUser) loginUser.value = rememberedUser;
-        if (loginPass && rememberedAccount?.p) loginPass.value = app._decodeSavedPassword(rememberedAccount.p);
-        if (remember && !remember.checked) {
-            remember.checked = true;
-            app.toggleRememberMe();
-        }
-    }
+    if (!saved) app._hydrateRememberedLogin();
 
     // ── Register Service Worker + Auto-Update System ─────────────
     if ('serviceWorker' in navigator) {

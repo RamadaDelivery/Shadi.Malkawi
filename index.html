@@ -91,19 +91,13 @@
                 </div>
 
                 <!-- ── Remember Me ── -->
-                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;cursor:pointer;" onclick="document.getElementById('rememberMe').click()">
-                    <div id="rememberMeBox" style="
-                        width:20px;height:20px;border-radius:6px;flex-shrink:0;
-                        border:1.5px solid rgba(201,168,76,.4);
-                        background:rgba(255,255,255,.05);
-                        display:flex;align-items:center;justify-content:center;
-                        transition:all .2s;
-                    ">
-                        <i class="fas fa-check" style="color:#C9A84C;font-size:.7rem;display:none;"></i>
-                    </div>
-                    <input type="checkbox" id="rememberMe" style="display:none;" onchange="app.toggleRememberMe()">
-                    <span class="remember-label" style="color:rgba(255,255,255,.88);font-size:.85rem;user-select:none;">تذكّرني</span>
-                </div>
+                <label class="remember-row" for="rememberMe">
+                    <span id="rememberMeBox" class="remember-box" aria-hidden="true">
+                        <i class="fas fa-check"></i>
+                    </span>
+                    <input type="checkbox" id="rememberMe" class="remember-input" onchange="app.toggleRememberMe()">
+                    <span class="remember-label">تذكّرني</span>
+                </label>
 
                 <button type="submit" class="btn-auth">دخول &nbsp;<i class="fas fa-arrow-left"></i></button>
             </form>

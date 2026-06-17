@@ -3,7 +3,7 @@
 // Network-First | Auto-Update on every deploy
 // ============================================================
 
-const CACHE_NAME = 'shm-cache-v5';
+const CACHE_NAME = 'shm-cache-v6';
 
 const SHELL = [
     './',
