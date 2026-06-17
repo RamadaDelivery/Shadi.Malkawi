@@ -35,7 +35,6 @@ window.app = {
     _listenersStarted: false,
     auditData: {},
     customColors: [],   // ألوان مخصصة من Firebase تُضاف لـ COLORS_AR
-    _policyBarcodeReserve: new Set(),
 
     // ── Simple hash (SHA-256 via SubtleCrypto) ───────────────
     async _hash(str) {
@@ -55,55 +54,22 @@ window.app = {
         const clean = (code || '').trim().toUpperCase();
         if (!clean) return false;
         return Object.entries(this.warehouse || {}).some(([id, w]) => {
-            const sameItem = id === ignoreItemId;
-            const ignoreMain = sameItem && (ignoreVarKey === null || ignoreVarKey === undefined || ignoreVarKey === '');
-            if (!ignoreMain && (w.barcode || '').toUpperCase() === clean) return true;
+            if (id !== ignoreItemId && (w.barcode || '').toUpperCase() === clean) return true;
             return Object.entries(w.variations || {}).some(([key, v]) => {
-                if (sameItem && key === ignoreVarKey) return false;
+                if (id === ignoreItemId && key === ignoreVarKey) return false;
                 return (v.barcode || '').toUpperCase() === clean;
             });
         });
     },
 
-    _generateBarcode(ignoreItemId = null, ignoreVarKey = null, reserved = new Set()) {
-        const reservedSet = reserved instanceof Set ? reserved : new Set(reserved || []);
-        for (let attempt = 0; attempt < 12000; attempt++) {
-            const randomPart = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
-            const code = `00${randomPart}`;
-            if (!reservedSet.has(code) && !this._barcodeExists(code, ignoreItemId, ignoreVarKey)) return code;
-        }
-        throw new Error('لا يوجد باركود متاح بصيغة 00 + 4 أرقام. راجع الباركودات المكررة أو وسّع النطاق.');
-    },
-
-    _policyBarcodeExists(code, ignoreOrderId = null) {
-        const clean = (code || '').trim().toUpperCase();
-        if (!clean) return false;
-        return Object.entries(this.orders || {}).some(([id, o]) => {
-            if (id === ignoreOrderId) return false;
-            return (o.policyBarcode || o.waybillBarcode || '').toString().trim().toUpperCase() === clean;
-        });
-    },
-
-    _legacyPolicyBarcode(id) {
-        return String(id || '').slice(-12).toUpperCase();
-    },
-
-    _generatePolicyBarcode(ignoreOrderId = null) {
-        if (!(this._policyBarcodeReserve instanceof Set)) this._policyBarcodeReserve = new Set();
-        for (let attempt = 0; attempt < 12000; attempt++) {
-            const randomPart = String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
-            const code = `98${randomPart}`;
-            if (!this._policyBarcodeReserve.has(code) && !this._policyBarcodeExists(code, ignoreOrderId)) {
-                this._policyBarcodeReserve.add(code);
-                return code;
-            }
-        }
-        throw new Error('تعذر إنشاء باركود بوليصة فريد.');
-    },
-
-    _orderPolicyBarcode(id, order = null) {
-        const saved = (order?.policyBarcode || order?.waybillBarcode || '').toString().trim().toUpperCase();
-        return saved || this._legacyPolicyBarcode(id);
+    _generateBarcode(ignoreItemId = null, ignoreVarKey = null) {
+        let code = '';
+        do {
+            const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
+            const timePart = Date.now().toString(36).slice(-4).toUpperCase();
+            code = `JW${timePart}${randomPart}`.slice(0, 12);
+        } while (this._barcodeExists(code, ignoreItemId, ignoreVarKey));
+        return code;
     },
 
     // ============ LOGIN ============
@@ -133,7 +99,7 @@ window.app = {
         this.user = u; this.role = ud.role; this.userName = ud.name;
         this.userPerms = ud.perms;
 
-        // حفظ الحساب إذا Remember Me مفعّل
+        // حفظ بيانات الدخول إذا Remember Me مفعّل
         if (document.getElementById('rememberMe')?.checked) {
             this._saveAccount(u, p);
         }
@@ -259,19 +225,63 @@ window.app = {
     },
 
     // ============ REMEMBER ME / SAVED ACCOUNTS ============
-    _getSavedAccounts() {
-        try { return JSON.parse(localStorage.getItem('shmSavedAccounts') || '[]'); }
-        catch { return []; }
+    _encodeSavedPassword(password) {
+        try {
+            const bytes = new TextEncoder().encode(`${password || ''}`);
+            let binary = '';
+            bytes.forEach(b => { binary += String.fromCharCode(b); });
+            return btoa(binary);
+        } catch {
+            return '';
+        }
     },
-    _saveAccount(username) {
-        const accounts = this._getSavedAccounts().filter(a => a.u !== username);
-        accounts.unshift({ u: username, ts: Date.now() });
+
+    _decodeSavedPassword(encoded) {
+        try {
+            if (!encoded) return '';
+            const binary = atob(encoded);
+            const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0));
+            return new TextDecoder().decode(bytes);
+        } catch {
+            return '';
+        }
+    },
+
+    _getSavedAccounts() {
+        try {
+            const raw = JSON.parse(localStorage.getItem('shmSavedAccounts') || '[]');
+            return Array.isArray(raw)
+                ? raw.filter(a => a && a.u).map(a => ({
+                    u: `${a.u}`,
+                    p: a.p || '',
+                    ts: a.ts || 0,
+                    v: a.v || 1
+                }))
+                : [];
+        } catch { return []; }
+    },
+
+    _saveAccount(username, password = '') {
+        const cleanUser = `${username || ''}`.trim().toLowerCase();
+        if (!cleanUser) return;
+        const accounts = this._getSavedAccounts().filter(a => a.u !== cleanUser);
+        accounts.unshift({
+            u: cleanUser,
+            p: this._encodeSavedPassword(password),
+            ts: Date.now(),
+            v: 2
+        });
         localStorage.setItem('shmSavedAccounts', JSON.stringify(accounts.slice(0, 5)));
+        localStorage.setItem('shmRememberLastUser', cleanUser);
     },
 
     _removeAccount(username) {
-        const accounts = this._getSavedAccounts().filter(a => a.u !== username);
+        const cleanUser = `${username || ''}`.trim().toLowerCase();
+        const accounts = this._getSavedAccounts().filter(a => a.u !== cleanUser);
         localStorage.setItem('shmSavedAccounts', JSON.stringify(accounts));
+        if (localStorage.getItem('shmRememberLastUser') === cleanUser) {
+            localStorage.removeItem('shmRememberLastUser');
+        }
         this.renderSavedAccounts();
     },
     toggleRememberMe() {
@@ -314,12 +324,13 @@ window.app = {
                             font-weight:800;font-size:.85rem;color:#1A1A2E;
                         ">${this._escapeHtml((a.u || '?')[0].toUpperCase())}</div>
                         <span class="saved-account-name" style="flex:1;color:#fff;font-size:.88rem;font-weight:800;">${this._escapeHtml(a.u)}</span>
-                        <button onclick="event.stopPropagation();app._removeAccount('${this._jsArg(a.u)}')" style="
-                            background:none;border:none;color:rgba(255,255,255,.64);
+                        ${a.p ? '<span class="saved-account-badge">دخول سريع</span>' : '<span class="saved-account-badge" style="background:rgba(255,255,255,.16);color:#fff;">كلمة مرور مطلوبة</span>'}
+                        <button class="saved-account-action" onclick="event.stopPropagation();app._removeAccount('${this._jsArg(a.u)}')" style="
+                            background:none;border:none;color:rgba(255,255,255,.82);
                             cursor:pointer;font-size:.8rem;padding:.2rem .4rem;
                             border-radius:6px;transition:color .2s;
-                        " onmouseenter="this.style.color='#e74c3c'"
-                           onmouseleave="this.style.color='rgba(255,255,255,.64)'">
+                        " onmouseenter="this.style.color='#ff8b8b'"
+                           onmouseleave="this.style.color='rgba(255,255,255,.82)'">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -334,15 +345,32 @@ window.app = {
         `;
     },
     async quickLogin(username) {
-        document.getElementById('loginUser').value = username;
-        document.getElementById('loginPass').value = '';
-        document.getElementById('loginPass').focus();
-        this.toast('أدخل كلمة المرور للمتابعة', 'info');
+        const cleanUser = `${username || ''}`.trim().toLowerCase();
+        const account = this._getSavedAccounts().find(a => a.u === cleanUser);
+        const password = this._decodeSavedPassword(account?.p || '');
+        document.getElementById('loginUser').value = cleanUser;
+        document.getElementById('loginPass').value = password;
+        const remember = document.getElementById('rememberMe');
+        if (remember && !remember.checked) {
+            remember.checked = true;
+            this.toggleRememberMe();
+        }
+        if (password) {
+            await this.login();
+        } else {
+            document.getElementById('loginPass').focus();
+            this.toast('أدخل كلمة المرور للمتابعة', 'info');
+        }
     },
 
     loginWithOther() {
         document.getElementById('loginUser').value = '';
         document.getElementById('loginPass').value = '';
+        const remember = document.getElementById('rememberMe');
+        if (remember?.checked) {
+            remember.checked = false;
+            this.toggleRememberMe();
+        }
         document.getElementById('loginUser').focus();
     },
 
@@ -691,10 +719,8 @@ window.app = {
     updateRItemFilter() {
         const sel = document.getElementById('rItem');
         if (!sel) return;
-        const items = [...new Set(Object.values(this.orders || {})
-            .flatMap(o => this._itemsOf(o).map(it => it.itemName))
-            .filter(Boolean))].sort();
-        sel.innerHTML = '<option value="">كل المنتجات</option>' + items.map(n => `<option value="${this._escapeHtml(n)}">${this._escapeHtml(n)}</option>`).join('');
+        const items = [...new Set(Object.values(this.orders).map(o => o.itemName).filter(Boolean))];
+        sel.innerHTML = '<option value="">كل المنتجات</option>' + items.map(n => `<option value="${n}">${n}</option>`).join('');
     },
 
     async addDef(type, inputId) {
@@ -821,30 +847,25 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
             targetId = `${inputId}_${idx}`;
             btnId = `${inputId}_btn_${idx}`;
         }
-        const activeRowsContainer = this._itemRowsContainer();
-        const resolveEl = (id) => {
-            if (id?.startsWith('ir_')) return activeRowsContainer?.querySelector(`#${id}`) || document.getElementById(id);
-            return document.getElementById(id);
-        };
-        const btn = resolveEl(btnId) || resolveEl(targetId);
+        const btn = document.getElementById(btnId) || document.getElementById(targetId);
         if (!btn) return;
         this._colorPickerOpen = targetId;
 
         const popup = document.createElement('div');
         popup.className = 'color-picker-popup';
 
-        const targetEl = resolveEl(targetId);
+        const targetEl = document.getElementById(targetId);
         const availableColors = targetEl?.dataset?.availableColors ? JSON.parse(targetEl.dataset.availableColors) : null;
 
         const applyColor = (c) => {
-            const target = resolveEl(targetId);
+            const target = document.getElementById(targetId);
             if (target) {
                 target.value = c.name;
                 target.dataset.hex = c.hex;
                 if (targetId.startsWith('ir_color_') || targetId.startsWith('tr_color_')) {
                     const rowIdx = target.dataset.idx;
                     const prefix = targetId.startsWith('tr_color_') ? 'tr' : 'ir';
-                    const preview = prefix === 'ir' ? (activeRowsContainer?.querySelector(`#${prefix}_color_preview_${rowIdx}`) || document.getElementById(`${prefix}_color_preview_${rowIdx}`)) : document.getElementById(`${prefix}_color_preview_${rowIdx}`);
+                    const preview = document.getElementById(`${prefix}_color_preview_${rowIdx}`);
                     if (preview) {
                         const bg = c.rainbow ? 'linear-gradient(135deg,#ff0000,#ff7700,#ffff00,#00ff00,#0000ff,#8b00ff)' : c.hex;
                         preview.innerHTML = `<span style="width:18px;height:18px;border-radius:5px;background:${bg};border:1.5px solid rgba(0,0,0,.12);flex-shrink:0;display:inline-block"></span>
@@ -1022,93 +1043,6 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
         return this._itemsOf(o).reduce((sum, it) => sum + this._safeQty(it.qty, 1), 0);
     },
 
-    _itemRowsContainer() {
-        return document.querySelector('#addItemToOrderModal #eItemsList')
-            || document.querySelector('#wiz-body #eItemsList')
-            || document.querySelector('#page-entry #eItemsList')
-            || document.getElementById('eItemsList');
-    },
-
-    _itemRowField(idx, selector) {
-        const container = this._itemRowsContainer();
-        return container?.querySelector(`${selector}[data-idx="${idx}"]`)
-            || document.querySelector(`${selector}[data-idx="${idx}"]`);
-    },
-
-    _warehouseEntryFromItemInput(input) {
-        if (!input) return null;
-        const itemId = input.dataset?.itemId;
-        if (itemId && this.warehouse[itemId]) return [itemId, this.warehouse[itemId]];
-        const itemName = String(input.value || '').trim();
-        if (!itemName) return null;
-        return Object.entries(this.warehouse || {}).find(([, w]) => w.name === itemName) || null;
-    },
-
-    _normalizeOrderItem(itemId, item, sizeCombo, color, qty) {
-        let finalSize = sizeCombo;
-        let finalColor = color;
-        if (String(sizeCombo).includes(' - ')) {
-            const parts = String(sizeCombo).split(' - ');
-            finalSize = parts[0];
-            finalColor = parts.slice(1).join(' - ');
-        }
-        return {
-            itemId,
-            itemName: item.name,
-            itemColor: finalColor,
-            size: finalSize,
-            exactKey: sizeCombo,
-            qty: this._safeQty(qty, 1),
-        };
-    },
-
-    _collectItemRows(container = this._itemRowsContainer()) {
-        const rows = [...(container?.querySelectorAll('.ir-item') || [])];
-        const items = [];
-        if (!rows.length) return { ok: false, items, message: 'أضف منتجاً واحداً على الأقل' };
-
-        for (let pos = 0; pos < rows.length; pos++) {
-            const input = rows[pos];
-            const idx = input.dataset.idx ?? String(pos);
-            const entry = this._warehouseEntryFromItemInput(input);
-            if (!entry) return { ok: false, items, message: `يرجى اختيار منتج صحيح للصف ${pos + 1}` };
-
-            const [itemId, item] = entry;
-            const rowCard = input.closest('.item-row-card') || container;
-            const sizeCombo = rowCard?.querySelector(`.ir-size[data-idx="${idx}"]`)?.value
-                || container?.querySelector(`.ir-size[data-idx="${idx}"]`)?.value
-                || '';
-            const color = rowCard?.querySelector(`#ir_color_${idx}`)?.value
-                || container?.querySelector(`#ir_color_${idx}`)?.value
-                || '';
-            const qty = this._safeQty(rowCard?.querySelector(`.ir-qty[data-idx="${idx}"]`)?.value
-                || container?.querySelector(`.ir-qty[data-idx="${idx}"]`)?.value, 1);
-
-            if (!sizeCombo || !color) return { ok: false, items, message: `يرجى اختيار (اللون + المقاس) للصف ${pos + 1}` };
-
-            const avail = this._safeNum(item.sizes?.[sizeCombo], 0);
-            if (qty > avail) {
-                return { ok: false, items, message: `الكمية المطلوبة (${qty}) غير متوفرة لـ ${item.name}. المتوفر (${avail})` };
-            }
-
-            items.push(this._normalizeOrderItem(itemId, item, sizeCombo, color, qty));
-        }
-        return { ok: true, items };
-    },
-
-    _itemRowsFirstItemPatch(items) {
-        const hasFirst = Array.isArray(items) && items.length > 0;
-        const first = hasFirst ? items[0] : {};
-        return {
-            itemId: first.itemId || null,
-            itemName: first.itemName || '',
-            itemColor: first.itemColor || '',
-            size: first.size || '',
-            exactKey: first.exactKey || '',
-            qty: hasFirst ? this._safeQty(first.qty, 1) : 0,
-        };
-    },
-
     _statusCounts(orders) {
         const counts = { new: 0, process: 0, done: 0, delivered: 0, postponed: 0, canceled: 0 };
         orders.forEach(o => { if (counts[o.status] !== undefined) counts[o.status]++; });
@@ -1171,12 +1105,12 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
     },
 
     filterSizesByColor(idx, colorName) {
-        const sel = this._itemRowField(idx, '.ir-item');
-        const sizeSel = this._itemRowField(idx, '.ir-size');
-        const stockInfo = this._itemRowField(idx, '.ir-stock');
+        const sel = document.querySelector(`.ir-item[data-idx="${idx}"]`);
+        const sizeSel = document.querySelector(`.ir-size[data-idx="${idx}"]`);
+        const stockInfo = document.querySelector(`.ir-stock[data-idx="${idx}"]`);
         if (!sel || !sizeSel) return;
-        const entry = this._warehouseEntryFromItemInput(sel);
-        const item = entry ? entry[1] : null;
+        const itemId = sel.value;
+        const item = this.warehouse[itemId];
         if (!item) return;
 
         let colorHasStock = false;
@@ -1196,7 +1130,7 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
 
         if (!colorHasStock) {
             this.toast(`اللون "${colorName}" غير متوفر (ليس له رصيد)`, 'error');
-            const cInp = this._itemRowsContainer()?.querySelector(`#ir_color_${idx}`) || document.getElementById(`ir_color_${idx}`);
+            const cInp = document.getElementById(`ir_color_${idx}`);
             if (cInp) { cInp.value = ''; cInp.style.borderRight = '4px solid var(--border)'; cInp.dataset.hex = ''; }
             this.loadRowSizes(idx);
             return;
@@ -1208,7 +1142,7 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
 
     // ============ ITEM ROWS (multi-product entry) ============
     initItemRows() {
-        if (!this._itemRowsContainer()) return;
+        if (!document.getElementById('eItemsList')) return;
         this.itemRows = [{ id: Date.now() }];
         this.renderItemRows();
     },
@@ -1234,11 +1168,11 @@ addItemRow() {
 
     _saveItemRowsState() {
         this.itemRows.forEach((row, idx) => {
-            const itemSel = this._itemRowField(idx, '.ir-item');
-            const sizeSel = this._itemRowField(idx, '.ir-size');
-            const colorInp = this._itemRowsContainer()?.querySelector(`#ir_color_${idx}`) || document.getElementById(`ir_color_${idx}`);
-            const qtyInp = this._itemRowField(idx, '.ir-qty');
-            if (itemSel) { row.savedItem = itemSel.value; row.savedItemId = itemSel.dataset.itemId || ''; }
+            const itemSel = document.querySelector(`.ir-item[data-idx="${idx}"]`);
+            const sizeSel = document.querySelector(`.ir-size[data-idx="${idx}"]`);
+            const colorInp = document.getElementById(`ir_color_${idx}`);
+            const qtyInp = document.querySelector(`.ir-qty[data-idx="${idx}"]`);
+            if (itemSel) row.savedItem = itemSel.value;
             if (sizeSel) row.savedSize = sizeSel.value;
             if (colorInp) { row.savedColor = colorInp.value; row.savedColorHex = colorInp.dataset.hex || ''; }
             if (qtyInp) row.savedQty = qtyInp.value;
@@ -1246,7 +1180,7 @@ addItemRow() {
     },
 
     renderItemRows() {
-        const container = this._itemRowsContainer();
+        const container = document.getElementById('eItemsList');
         if (!container) return;
         container.innerHTML = this.itemRows.map((row, idx) => `
             <div class="item-row-card" id="itemrow_${idx}">
@@ -1268,8 +1202,7 @@ addItemRow() {
                                id="ir_item_inp_${idx}"
                                placeholder="ابحث عن منتج..."
                                autocomplete="off"
-                               value="${this._escapeHtml(row.savedItem || '')}"
-                               data-item-id="${this._escapeHtml(row.savedItemId || '')}"
+                               value="${row.savedItem || ''}"
                                oninput="app.onItemSearch(${idx}, this.value)"
                                onfocus="app.onItemSearch(${idx}, this.value)"
                                onblur="setTimeout(()=>app.closeItemDropdown(${idx}),200)">
@@ -1328,7 +1261,7 @@ addItemRow() {
             if (row.savedItem) {
                 this.loadRowColors(idx);
                 // إعادة تعيين اللون المحفوظ
-                const colorInp = this._itemRowsContainer()?.querySelector(`#ir_color_${idx}`) || document.getElementById(`ir_color_${idx}`);
+                const colorInp = document.getElementById(`ir_color_${idx}`);
                 if (colorInp && row.savedColor) {
                     colorInp.value = row.savedColor;
                     colorInp.dataset.hex = row.savedColorHex || '';
@@ -1340,7 +1273,7 @@ addItemRow() {
         });
     },
     onItemSearch(idx, val) {
-        const inp = this._itemRowField(idx, '.ir-item');
+        const inp = document.getElementById(`ir_item_inp_${idx}`);
         if (!inp) return;
         const existing = document.getElementById(`item_dd_${idx}`);
         if (existing) existing.remove();
@@ -1366,7 +1299,7 @@ addItemRow() {
             const colorDot = w.color ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${this._colorHex(w.color)||'#ccc'};border:1px solid rgba(0,0,0,.2);vertical-align:middle;margin-left:5px;flex-shrink:0"></span>` : '';
             const total = Object.values(w.sizes || {}).reduce((a, b) => a + b, 0);
             const stockClr = total === 0 ? 'var(--ruby-light)' : total <= 3 ? '#f0a500' : 'var(--emerald)';
-            return `<div onclick="app.selectItem(${idx},'${this._jsArg(w.name)}','${this._jsArg(id)}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);font-size:.88rem" onmouseenter="this.style.background='rgba(201,168,76,.12)'" onmouseleave="this.style.background=''">
+            return `<div onclick="app.selectItem(${idx},'${w.name.replace(/'/g,"\'")}','${id}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);font-size:.88rem" onmouseenter="this.style.background='rgba(201,168,76,.12)'" onmouseleave="this.style.background=''">
                 ${colorDot}<span style="flex:1;font-weight:700">${w.name}</span>
                 <span style="font-size:.72rem;color:${stockClr};font-weight:700;background:${stockClr}18;padding:2px 7px;border-radius:10px">${total} قطعة</span>
             </div>`;
@@ -1375,9 +1308,9 @@ addItemRow() {
     },
 
     selectItem(idx, name, id) {
-        const inp = this._itemRowField(idx, '.ir-item');
+        const inp = document.querySelector(`.ir-item[data-idx="${idx}"]`);
         const dd = document.getElementById(`item_dd_${idx}`);
-        if (inp) { inp.value = name; inp.dataset.itemId = id || ''; }
+        if (inp) inp.value = name;
         if (dd) dd.remove();
         this.loadRowColors(idx);
         // Auto-fill pageName in wizard state if item has a linked page
@@ -1397,12 +1330,13 @@ addItemRow() {
     },
 
         loadRowColors(idx) {
-        const sel = this._itemRowField(idx, '.ir-item');
-        const colorInp = this._itemRowsContainer()?.querySelector(`#ir_color_${idx}`) || document.getElementById(`ir_color_${idx}`);
-        const sizeSel = this._itemRowField(idx, '.ir-size');
-        const stockInfo = this._itemRowField(idx, '.ir-stock');
+        const sel = document.querySelector(`.ir-item[data-idx="${idx}"]`);
+        const colorInp = document.getElementById(`ir_color_${idx}`);
+        const sizeSel = document.querySelector(`.ir-size[data-idx="${idx}"]`);
+        const stockInfo = document.querySelector(`.ir-stock[data-idx="${idx}"]`);
         if (!sel || !colorInp) return;
-        const foundEntry = this._warehouseEntryFromItemInput(sel);
+        const itemName = sel.value.trim();
+        const foundEntry = Object.entries(this.warehouse).find(([, w]) => w.name === itemName);
         const item = foundEntry ? foundEntry[1] : null;
         const pageSel = document.getElementById('ePageName');
         if (item && item.pageName && pageSel) pageSel.value = item.pageName;
@@ -1435,18 +1369,19 @@ addItemRow() {
         colorInp.dataset.itemIdx = idx;
     },
     loadRowSizes(idx, preselectSize, filterColor = null) {
-        const sel = this._itemRowField(idx, '.ir-item');
-        const sizeSel = this._itemRowField(idx, '.ir-size');
-        const stockInfo = this._itemRowField(idx, '.ir-stock');
+        const sel = document.querySelector(`.ir-item[data-idx="${idx}"]`);
+        const sizeSel = document.querySelector(`.ir-size[data-idx="${idx}"]`);
+        const stockInfo = document.querySelector(`.ir-stock[data-idx="${idx}"]`);
         if (!sel || !sizeSel) return;
-        const foundEntry = this._warehouseEntryFromItemInput(sel);
+        const itemName = sel.value.trim();
+        const foundEntry = Object.entries(this.warehouse).find(([id, w]) => w.name === itemName);
         const itemId = foundEntry ? foundEntry[0] : null;
         const item = foundEntry ? foundEntry[1] : null;
         const pageSel = document.getElementById('ePageName');
         if (item && item.pageName && pageSel) pageSel.value = item.pageName;
         sizeSel.innerHTML = '<option value="">المقاس</option>';
         if (!item) return;
-        const colorToFilter = filterColor || (this._itemRowsContainer()?.querySelector(`#ir_color_${idx}`) || document.getElementById(`ir_color_${idx}`))?.value || null;
+        const colorToFilter = filterColor || document.getElementById(`ir_color_${idx}`)?.value || null;
         Object.entries(item.sizes || {}).forEach(([key, q]) => {
             // فصل المقاس واللون من المفتاح المركب
             let dispSize = key, keyColor = '';
@@ -1475,7 +1410,7 @@ addItemRow() {
                 else if (item.sizeColors?.[val]) { vColor = item.sizeColors[val]; vHex = this._colorHex(vColor) || ''; }
                 else if (val.includes(' - ')) { vColor = val.split(' - ').slice(1).join(' - '); vHex = this._colorHex(vColor); }
                 else if (item.color) { vColor = item.color; vHex = this._colorHex(vColor) || ''; }
-                const cInp = this._itemRowsContainer()?.querySelector(`#ir_color_${idx}`) || document.getElementById(`ir_color_${idx}`);
+                const cInp = document.getElementById(`ir_color_${idx}`);
                 if (cInp && vColor) { cInp.value = vColor; cInp.dataset.hex = vHex || ''; cInp.style.borderRight = `4px solid ${vHex || 'var(--border)'}`; }
             }
         };
@@ -1484,68 +1419,87 @@ addItemRow() {
     },
 
     adjustRowQty(idx, delta) {
-        const el = this._itemRowField(idx, '.ir-qty');
+        const el = document.querySelector(`.ir-qty[data-idx="${idx}"]`);
         if (el) el.value = Math.max(1, (parseInt(el.value) || 1) + delta);
     },
 
     // ============ SAVE ORDER ============
     async saveOrder() {
-        const custName = this._cleanText(document.getElementById('eCustName')?.value);
-        const mob = (document.getElementById('eCustMob')?.value || '').replace(/\D/g, '');
-        const gov = this._cleanText(document.getElementById('eGovernorate')?.value);
-        const addr = this._cleanText(document.getElementById('eAddr')?.value);
-        const price = this._safeNum(document.getElementById('ePrice')?.value, 0);
-        const pageName = this._cleanText(document.getElementById('ePageName')?.value);
-        const tags = this._cleanText(document.getElementById('eTags')?.value);
+        const custName = this._cleanText(document.getElementById('eCustName').value);
+        const mob = document.getElementById('eCustMob').value.replace(/\D/g, '');
+        const gov = this._cleanText(document.getElementById('eGovernorate').value);
+        const addr = this._cleanText(document.getElementById('eAddr').value);
+        const price = this._safeNum(document.getElementById('ePrice').value, 0);
+        const pageName = this._cleanText(document.getElementById('ePageName').value);
+        const entryUser = document.getElementById('eEntryUser').value;
+        const tags = this._cleanText(document.getElementById('eTags').value);
+
 
         if (!custName) { this.toast('يرجى إدخال اسم الزبون', 'error'); return; }
-        if (mob.length !== 8) { this.toast('رقم الموبايل يجب أن يكون 8 أرقام', 'error'); return; }
+       if (mob.length !== 8) { this.toast('رقم الموبايل يجب أن يكون 8 أرقام', 'error'); return; }
         if (!addr) { this.toast('يرجى إدخال العنوان', 'error'); return; }
         if (!pageName) { this.toast('اسم الصفحة إجباري', 'error'); return; }
-        if (this.role === 'User') document.getElementById('eEntryUser').value = this.userName;
-        const entryUserFinal = document.getElementById('eEntryUser')?.value || this.userName;
+      if (this.role === 'User') document.getElementById('eEntryUser').value = this.userName;
+        const entryUserFinal = document.getElementById('eEntryUser').value;
         if (!entryUserFinal) { this.toast('اسم المدخل إجباري', 'error'); return; }
         if (!price || price <= 0) { this.toast('يرجى إدخال السعر', 'error'); return; }
 
-        const collected = this._collectItemRows();
-        if (!collected.ok) { this.toast(collected.message, 'error'); return; }
-        const items = collected.items;
+        const items = [];
+        const itemSelectors = document.querySelectorAll('.ir-item');
+        for (let i = 0; i < itemSelectors.length; i++) {
+            const itemNameInput = itemSelectors[i].value;
+            const foundEntry = Object.entries(this.warehouse).find(([id, w]) => w.name === itemNameInput);
+            const itemId = foundEntry ? foundEntry[0] : null;
+            const item = foundEntry ? foundEntry[1] : null;
+
+            // تعريف المتغيرات مرة واحدة فقط
+            const sizeCombo = document.querySelector(`.ir-size[data-idx="${i}"]`)?.value;
+            const color = document.getElementById(`ir_color_${i}`)?.value || '';
+            const qty = parseInt(document.querySelector(`.ir-qty[data-idx="${i}"]`)?.value) || 1;
+
+            // التحقق الصارم من وجود الثلاثي المرح
+            if (!itemId || !sizeCombo || !color) {
+                this.toast(`يرجى اختيار (المنتج + اللون + المقاس) للصف ${i + 1}`, 'error');
+                return;
+            }
+
+            // التحقق من الكمية المتوفرة
+            const avail = item.sizes?.[sizeCombo] || 0;
+            if (qty > avail) {
+                this.toast(`الكمية المطلوبة (${qty}) غير متوفرة لـ ${item.name}! المتوفر (${avail})`, 'error');
+                return;
+            }
+
+            // بناء بيانات الصنف
+            let finalSize = sizeCombo;
+            let finalColor = color;
+            if (sizeCombo.includes(' - ')) {
+                finalSize = sizeCombo.split(' - ')[0];
+                finalColor = sizeCombo.split(' - ')[1];
+            }
+
+            items.push({ itemId, itemName: item.name, itemColor: finalColor, size: finalSize, exactKey: sizeCombo, qty });
+        }
 
         const stockPlan = this._stockDeltaPlan(items, 'deduct');
         if (!stockPlan.ok) { this.toast(stockPlan.message, 'error'); return; }
 
-        const policyBarcode = this._generatePolicyBarcode();
         const payload = {
-            timestamp: Date.now(),
-            policyBarcode,
-            waybillBarcode: policyBarcode,
-            date: document.getElementById('eDate')?.value || new Date().toLocaleDateString('en-GB'),
+            timestamp: Date.now(), date: document.getElementById('eDate').value,
             custName, custMob: '07' + mob, country: 'الأردن', governorate: gov, custAddr: addr,
-            ...this._itemRowsFirstItemPatch(items),
-            items, price, currency: 'JOD', pageName, entryUser: entryUserFinal, tags,
-            status: 'new',
-            stockDeducted: true,
+            itemId: items[0].itemId, itemName: items[0].itemName, itemColor: items[0].itemColor,
+            size: items[0].size, exactKey: items[0].exactKey, qty: items[0].qty,
+       items, price, currency: 'JOD', pageName, entryUser: entryUserFinal, tags, status: 'new'
         };
 
-        const saveBtn = document.querySelector('[onclick="app.saveOrder()"]');
-        const oldHtml = saveBtn?.innerHTML;
-        try {
-            if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ الحفظ...'; }
-            const newRef = push(ordersRef);
-            const updates = { [`jawaher_orders/${newRef.key}`]: payload, ...stockPlan.updates };
-            await update(ref(db), updates);
-            this.lastOrderId = newRef.key;
-            this.log('create', newRef.key, `إنشاء طلب للزبون: ${custName} | صفحة: ${pageName}`);
-            this.toast('تم حفظ الطلب بنجاح ✓', 'success');
-            this.resetOrderForm();
-            const printBtn = document.getElementById('lastOrderPrintBtn');
-            if (printBtn) printBtn.style.display = 'block';
-        } catch (err) {
-            console.error(err);
-            this.toast(err?.message || 'فشل حفظ الطلب. تحقق من الاتصال والصلاحيات.', 'error');
-        } finally {
-            if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = oldHtml || '<i class="fas fa-save"></i> حفظ الطلب'; }
-        }
+        const newRef = await push(ordersRef, payload);
+        this.lastOrderId = newRef.key;
+        // خصم المخزون فوراً عند إنشاء الطلب
+        await this.deductStockDirect(newRef.key, payload);
+        this.log('create', newRef.key, `إنشاء طلب للزبون: ${custName} | صفحة: ${pageName}`);
+        this.toast('تم حفظ الطلب بنجاح ✓', 'success');
+        this.resetOrderForm();
+        document.getElementById('lastOrderPrintBtn').style.display = 'block';
     },
 
     resetOrderForm() {
@@ -1553,7 +1507,7 @@ addItemRow() {
             const el = document.getElementById(id); if (el) el.value = '';
         });
         const pageSel = document.getElementById('ePageName'); if (pageSel) pageSel.value = '';
-        const dupWarn = document.getElementById('eDupWarn'); if (dupWarn) dupWarn.style.display = 'none';
+        document.getElementById('eDupWarn').style.display = 'none';
         this.initItemRows();
     },
 
@@ -1885,319 +1839,87 @@ addItemRow() {
 
     openAddItemToOrder(orderId) {
         document.getElementById('addItemToOrderModal')?.remove();
-
         const modal = document.createElement('div');
-        modal.id = 'addItemToOrderModal';
-        modal.className = 'modal-j open add-item-modal-fullscreen';
-        modal.setAttribute('role', 'dialog');
-        modal.setAttribute('aria-modal', 'true');
-        modal.style.cssText = `display:flex!important;align-items:stretch!important;justify-content:center!important;z-index:99999!important;position:fixed!important;inset:0!important;`;
-
+        modal.id = 'addItemToOrderModal'; modal.className = 'modal-j open';
         modal.innerHTML = `
-        <style>
-            #addItemToOrderModal,
-            #addItemToOrderModal.modal-j.open {
-                display:flex !important;
-                position:fixed !important;
-                inset:0 !important;
-                width:100vw !important;
-                height:100dvh !important;
-                align-items:stretch !important;
-                justify-content:center !important;
-                z-index:99999 !important;
-                padding:0 !important;
-            }
-            #addItemToOrderModal .modal-overlay {
-                position:fixed !important;
-                inset:0 !important;
-                background:rgba(10,16,32,.78) !important;
-                backdrop-filter:blur(6px) !important;
-            }
-            #addItemToOrderModal .order-add-fullscreen-sheet {
-                position:relative !important;
-                z-index:1 !important;
-                width:min(1180px,100vw) !important;
-                height:100dvh !important;
-                max-width:none !important;
-                max-height:none !important;
-                margin:0 auto !important;
-                padding:0 !important;
-                border-radius:0 !important;
-                background:var(--paper) !important;
-                box-shadow:0 0 0 1px var(--border), 0 26px 90px rgba(0,0,0,.30) !important;
-                display:flex !important;
-                flex-direction:column !important;
-                overflow:hidden !important;
-                animation:none !important;
-            }
-            #addItemToOrderModal .order-add-fullscreen-header {
-                flex:0 0 auto !important;
-                display:flex !important;
-                align-items:center !important;
-                justify-content:space-between !important;
-                gap:1rem !important;
-                padding:1rem 1.25rem !important;
-                background:linear-gradient(180deg,var(--paper),var(--paper-warm)) !important;
-                border-bottom:1px solid var(--border) !important;
-            }
-            #addItemToOrderModal .order-add-fullscreen-title {
-                margin:0 !important;
-                font-size:1.22rem !important;
-                font-weight:900 !important;
-                color:var(--ink) !important;
-                display:flex !important;
-                align-items:center !important;
-                gap:.45rem !important;
-            }
-            #addItemToOrderModal .order-add-fullscreen-subtitle {
-                margin:.28rem 0 0 !important;
-                color:var(--ink-mid) !important;
-                font-size:.86rem !important;
-                font-weight:600 !important;
-            }
-            #addItemToOrderModal .order-add-fullscreen-body {
-                flex:1 1 auto !important;
-                min-height:0 !important;
-                overflow-y:auto !important;
-                padding:1.15rem 1.25rem 1.35rem !important;
-                background:var(--paper) !important;
-            }
-            #addItemToOrderModal .order-add-fullscreen-footer {
-                flex:0 0 auto !important;
-                display:flex !important;
-                align-items:center !important;
-                gap:.75rem !important;
-                padding:1rem 1.25rem calc(1rem + env(safe-area-inset-bottom)) !important;
-                background:var(--paper) !important;
-                border-top:1px solid var(--border) !important;
-                box-shadow:0 -10px 28px rgba(10,16,32,.08) !important;
-            }
-            #addItemToOrderModal #eItemsList {
-                display:block !important;
-                width:100% !important;
-            }
-            #addItemToOrderModal .item-row-card {
-                padding:1rem !important;
-                margin-bottom:1rem !important;
-                border-radius:18px !important;
-                background:var(--paper-warm) !important;
-                border:1.5px solid var(--border) !important;
-                border-right:4px solid var(--gold) !important;
-                box-shadow:0 8px 24px rgba(10,16,32,.05) !important;
-            }
-            #addItemToOrderModal .item-row-header {
-                margin-bottom:.85rem !important;
-            }
-            #addItemToOrderModal .item-row-fields {
-                display:grid !important;
-                grid-template-columns:minmax(260px,2fr) minmax(190px,1.15fr) minmax(180px,1.05fr) minmax(150px,.75fr) !important;
-                gap:.9rem !important;
-                align-items:start !important;
-            }
-            #addItemToOrderModal .item-row-product,
-            #addItemToOrderModal .item-row-color,
-            #addItemToOrderModal .item-row-size,
-            #addItemToOrderModal .item-row-qty {
-                grid-column:auto !important;
-                min-width:0 !important;
-            }
-            #addItemToOrderModal .form-label-j {
-                font-size:.82rem !important;
-                font-weight:900 !important;
-                margin-bottom:.4rem !important;
-                color:var(--ink) !important;
-            }
-            #addItemToOrderModal .form-control-j,
-            #addItemToOrderModal .select-j,
-            #addItemToOrderModal .qty-btn,
-            #addItemToOrderModal [id^="ir_color_btn_"] {
-                min-height:50px !important;
-            }
-            #addItemToOrderModal .form-control-j,
-            #addItemToOrderModal .select-j {
-                font-size:1rem !important;
-                border-radius:14px !important;
-            }
-            #addItemToOrderModal .item-row-color [id^="ir_color_preview_"] {
-                min-height:50px !important;
-                border-radius:14px !important;
-                padding:.65rem .8rem !important;
-                background:var(--paper) !important;
-            }
-            #addItemToOrderModal .item-row-qty .qty-control {
-                width:100% !important;
-                justify-content:stretch !important;
-                gap:.45rem !important;
-            }
-            #addItemToOrderModal .item-row-qty .qty-btn {
-                width:46px !important;
-                height:50px !important;
-                border-radius:14px !important;
-            }
-            #addItemToOrderModal .item-row-qty .qty-input {
-                flex:1 1 auto !important;
-                width:100% !important;
-                min-width:64px !important;
-                height:50px !important;
-                font-size:1.05rem !important;
-            }
-            #addItemToOrderModal .add-item-row-btn {
-                min-height:52px !important;
-                border-radius:16px !important;
-                font-size:.98rem !important;
-                margin-top:.25rem !important;
-            }
-            @media (max-width: 760px) {
-                #addItemToOrderModal .order-add-fullscreen-sheet {
-                    width:100vw !important;
-                    height:100dvh !important;
-                    margin:0 !important;
-                }
-                #addItemToOrderModal .order-add-fullscreen-header {
-                    padding:.9rem .95rem !important;
-                }
-                #addItemToOrderModal .order-add-fullscreen-title {
-                    font-size:1.05rem !important;
-                }
-                #addItemToOrderModal .order-add-fullscreen-subtitle {
-                    display:none !important;
-                }
-                #addItemToOrderModal .order-add-fullscreen-body {
-                    padding:.85rem .85rem 1rem !important;
-                }
-                #addItemToOrderModal .item-row-card {
-                    padding:.9rem !important;
-                    border-radius:16px !important;
-                }
-                #addItemToOrderModal .item-row-fields {
-                    grid-template-columns:1fr !important;
-                    gap:.85rem !important;
-                }
-                #addItemToOrderModal .item-row-product,
-                #addItemToOrderModal .item-row-color,
-                #addItemToOrderModal .item-row-size,
-                #addItemToOrderModal .item-row-qty {
-                    grid-column:1 / -1 !important;
-                    width:100% !important;
-                }
-                #addItemToOrderModal .order-add-fullscreen-footer {
-                    padding:.75rem .85rem calc(.75rem + env(safe-area-inset-bottom)) !important;
-                    flex-direction:column !important;
-                }
-                #addItemToOrderModal .order-add-fullscreen-footer .btn-j {
-                    width:100% !important;
-                    justify-content:center !important;
-                    min-height:52px !important;
-                }
-            }
-        </style>
-        <div class="modal-overlay" onclick="document.getElementById('addItemToOrderModal')?.remove()"></div>
-        <div class="order-add-fullscreen-sheet">
-            <div class="order-add-fullscreen-header">
-                <div>
-                    <h2 class="order-add-fullscreen-title"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> إضافة أصناف للطلب - شاشة كاملة</h2>
-                    <p class="order-add-fullscreen-subtitle">مساحة موسعة لاختيار المنتج، اللون، المقاس والكمية بدون ضغط أو تداخل.</p>
-                </div>
-                <button class="btn-j btn-ghost btn-sm-j" onclick="document.getElementById('addItemToOrderModal')?.remove()"><i class="fas fa-times"></i> إغلاق</button>
-            </div>
-            <div class="order-add-fullscreen-body">
-                <div id="addItemRows"><div id="eItemsList"></div></div>
-                <button class="add-item-row-btn mt-2" onclick="app.addItemRow()"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> صنف آخر</button>
-            </div>
-            <div class="order-add-fullscreen-footer">
+        <div class="modal-overlay" onclick="document.getElementById('addItemToOrderModal').remove()"></div>
+        <div class="modal-sheet" style="max-width:480px">
+            <div class="modal-handle"></div>
+            <div class="modal-title"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> إضافة صنف للطلب</div>
+            <div id="addItemRows"><div id="eItemsList" style="display:block"></div></div>
+            <button class="add-item-row-btn mt-2" onclick="app.addItemRow()"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> صنف آخر</button>
+            <div class="d-flex gap-3 mt-4">
                 <button class="btn-j btn-gold flex-fill" onclick="app._confirmAddItemsToOrder('${orderId}')">
                     <i class="fas fa-save"></i> حفظ وإضافة للطلب
                 </button>
-                <button class="btn-j btn-ghost" onclick="document.getElementById('addItemToOrderModal')?.remove()">إلغاء</button>
+                <button class="btn-j btn-ghost" onclick="document.getElementById('addItemToOrderModal').remove()">إلغاء</button>
             </div>
         </div>`;
-
         document.body.appendChild(modal);
-        document.body.classList.add('add-item-modal-open');
-        modal.addEventListener('remove', () => document.body.classList.remove('add-item-modal-open'));
-        const cleanup = () => document.body.classList.remove('add-item-modal-open');
-        const observer = new MutationObserver(() => {
-            if (!document.body.contains(modal)) { cleanup(); observer.disconnect(); }
-        });
-        observer.observe(document.body, { childList: true });
-
         this.itemRows = [{ id: Date.now() }];
         this.renderItemRows();
     },
 
     async _confirmAddItemsToOrder(orderId) {
-        const o = this.orders[orderId];
-        if (!o) return;
-
-        const container = document.querySelector('#addItemToOrderModal #eItemsList');
-        const collected = this._collectItemRows(container);
-        if (!collected.ok) { this.toast(collected.message, 'error'); return; }
-        const newItems = collected.items;
-
-        const existingItems = this._itemsOf(o);
+        const o = this.orders[orderId]; if (!o) return;
+        const newItems = [];
+        const rows = document.querySelectorAll('.ir-item');
+        for (let i = 0; i < rows.length; i++) {
+            const itemName = rows[i].value;
+            const found = Object.entries(this.warehouse).find(([,w]) => w.name === itemName);
+            if (!found) { this.toast(`يرجى اختيار منتج للصف ${i+1}`, 'error'); return; }
+            const sizeCombo = document.querySelector(`.ir-size[data-idx="${i}"]`)?.value;
+            const color = document.getElementById(`ir_color_${i}`)?.value || '';
+            const qty = parseInt(document.querySelector(`.ir-qty[data-idx="${i}"]`)?.value) || 1;
+            if (!sizeCombo || !color) { this.toast(`يرجى تحديد اللون والمقاس للصف ${i+1}`, 'error'); return; }
+            const avail = found[1].sizes?.[sizeCombo] || 0;
+            if (qty > avail) { this.toast(`الكمية (${qty}) غير متوفرة لـ ${found[1].name}. المتوفر: ${avail}`, 'error'); return; }
+            let finalSize = sizeCombo, finalColor = color;
+            if (sizeCombo.includes(' - ')) { finalSize = sizeCombo.split(' - ')[0]; finalColor = sizeCombo.split(' - ')[1]; }
+            newItems.push({ itemId: found[0], itemName: found[1].name, itemColor: finalColor, size: finalSize, exactKey: sizeCombo, qty });
+        }
+        if (!newItems.length) return;
+        const existingItems = o.items || [{ itemId: o.itemId, itemName: o.itemName, itemColor: o.itemColor, size: o.size, exactKey: o.exactKey, qty: o.qty }];
         const mergedItems = [...existingItems, ...newItems];
-        const updates = {
-            [`jawaher_orders/${orderId}/items`]: mergedItems,
-            [`jawaher_orders/${orderId}/qty`]: mergedItems.reduce((s, it) => s + this._safeQty(it.qty, 1), 0),
-            ...Object.fromEntries(Object.entries(this._itemRowsFirstItemPatch(mergedItems)).map(([k, v]) => [`jawaher_orders/${orderId}/${k}`, v])),
-        };
-
+        const updates = {};
+        updates[`jawaher_orders/${orderId}/items`] = mergedItems;
+        updates[`jawaher_orders/${orderId}/qty`] = mergedItems.reduce((s,it)=>s+(it.qty||1),0);
+        // خصم من المستودع فقط إذا كان الطلب محجوزاً من المخزون
         if (o.stockDeducted || this._isStockActiveStatus(o.status)) {
-            const itemsToDeduct = o.stockDeducted ? newItems : mergedItems;
-            const plan = this._stockDeltaPlan(itemsToDeduct, 'deduct');
+            const plan = this._stockDeltaPlan(newItems, 'deduct');
             if (!plan.ok) { this.toast(plan.message, 'error'); return; }
             Object.assign(updates, plan.updates);
             updates[`jawaher_orders/${orderId}/stockDeducted`] = true;
         }
-
-        const btn = document.querySelector('#addItemToOrderModal button[onclick^="app._confirmAddItemsToOrder"]');
-        const oldHtml = btn?.innerHTML;
-        try {
-            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ الحفظ...'; }
-            await update(ref(db), updates);
-            this.log('edit', orderId, `إضافة ${newItems.length} صنف للطلب`);
-            this.toast('تم إضافة الأصناف للطلب ✓', 'success');
-            document.getElementById('addItemToOrderModal')?.remove();
-            this.openOrderModal(orderId);
-        } catch (err) {
-            console.error(err);
-            this.toast(err?.message || 'فشل إضافة الأصناف للطلب', 'error');
-        } finally {
-            if (btn) { btn.disabled = false; btn.innerHTML = oldHtml || '<i class="fas fa-save"></i> حفظ وإضافة للطلب'; }
-        }
+        await update(ref(db), updates);
+        this.log('edit', orderId, `إضافة ${newItems.length} صنف للطلب`);
+        this.toast('تم إضافة الأصناف للطلب ✓', 'success');
+        document.getElementById('addItemToOrderModal')?.remove();
+        this.openOrderModal(orderId);
     },
-    async updateOrder() {
-        const id = this.modalOrderId;
-        if (!id) return;
-        const o = this.orders[id];
-        if (!o) return;
-
-        const btn = document.getElementById('modalUpdateBtn');
-        const oldHtml = btn?.innerHTML;
+async updateOrder() {
+        const id = this.modalOrderId; if (!id) return;
+        const o = this.orders[id]; if (!o) return;
         try {
-            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ الحفظ...'; }
-
             const payload = {
-                custName: this._cleanText(document.getElementById('mo_name')?.value),
-                custMob: this._cleanText(document.getElementById('mo_mob')?.value),
-                custAddr: this._cleanText(document.getElementById('mo_addr')?.value),
-                price: this._safeNum(document.getElementById('mo_price')?.value, 0),
-                tags: this._cleanText(document.getElementById('mo_tags')?.value),
+                custName: this._cleanText(document.getElementById('mo_name').value),
+                custMob: this._cleanText(document.getElementById('mo_mob').value),
+                custAddr: this._cleanText(document.getElementById('mo_addr').value),
+                price: this._safeNum(document.getElementById('mo_price').value, 0),
+                tags: this._cleanText(document.getElementById('mo_tags').value),
             };
-
-            const updatedOrder = { ...o, ...payload };
-            const updates = {};
+            const updates = { [`jawaher_orders/${id}`]: { ...o, ...payload } };
 
             if (Array.isArray(o.items) && o.items.length) {
                 const oldItems = this._itemsOf(o);
                 const newItems = oldItems.map((it, idx) => {
                     const el = document.getElementById(`mo_qty_${idx}`);
-                    return el ? { ...it, qty: this._safeQty(el.value, it.qty) } : { ...it, qty: this._safeQty(it.qty, 1) };
+                    return el ? { ...it, qty: this._safeQty(el.value, it.qty) } : it;
                 });
-
-                updatedOrder.items = newItems;
-                updatedOrder.qty = newItems.reduce((s, it) => s + this._safeQty(it.qty, 1), 0);
-                Object.assign(updatedOrder, this._itemRowsFirstItemPatch(newItems));
+                payload.items = newItems;
+                payload.qty = newItems.reduce((s, it) => s + this._safeQty(it.qty, 1), 0);
+                updates[`jawaher_orders/${id}/items`] = newItems;
+                updates[`jawaher_orders/${id}/qty`] = payload.qty;
 
                 if (o.stockDeducted) {
                     const buckets = new Map();
@@ -2206,17 +1928,15 @@ addItemRow() {
                         const newQty = this._safeQty(it.qty, 1);
                         const qtyDelta = newQty - oldQty;
                         if (qtyDelta === 0 || !it.itemId) return;
-                        const item = this.warehouse[it.itemId];
-                        if (!item) return;
+                        const item = this.warehouse[it.itemId]; if (!item) return;
                         const key = this._stockKey(item, it);
-                        if (!key) return;
                         const path = `jawaher_warehouse/${it.itemId}/sizes/${key}`;
                         if (!buckets.has(path)) {
                             buckets.set(path, { path, name: item.name || it.itemName || 'صنف', key, current: this._safeNum(item.sizes?.[key], 0), delta: 0 });
                         }
+                        // Increasing order qty deducts extra stock; decreasing order qty returns stock.
                         buckets.get(path).delta += -qtyDelta;
                     });
-
                     for (const b of buckets.values()) {
                         const next = b.current + b.delta;
                         if (next < 0) {
@@ -2228,55 +1948,64 @@ addItemRow() {
                 }
             }
 
-            updates[`jawaher_orders/${id}`] = updatedOrder;
             await update(ref(db), updates);
             this.log('edit', id, 'تعديل بيانات الطلب مع تسوية المخزون');
-            this._auditLog('order_edit', id, o, updatedOrder, `تعديل طلب ${o.custName}`);
+            this._auditLog('order_edit', id, o, payload, `تعديل طلب ${o.custName}`);
             this.toast('تم حفظ التعديلات وتحديث المخزون بدقة ✓', 'success');
             this.closeModal('orderModal');
         } catch (err) {
             console.error(err);
-            this.toast(err?.message || 'حدث خطأ أثناء التحديث', 'error');
-        } finally {
-            if (btn) { btn.disabled = false; btn.innerHTML = oldHtml || '<i class="fas fa-save"></i> حفظ التعديلات'; }
+            this.toast('حدث خطأ أثناء التحديث', 'error');
         }
     },
+
 
     _moAdjQty(idx, delta) {
         const el = document.getElementById(`mo_qty_${idx}`);
         if (el) el.value = Math.max(1, (parseInt(el.value)||1) + delta);
     },
 
-    async _moRemoveItem(orderId, idx) {
-        const o = this.orders[orderId];
-        if (!o?.items || o.items.length <= 1) { this.toast('لا يمكن حذف الصنف الوحيد', 'error'); return; }
-        if (!confirm('حذف هذا الصنف من الطلب؟')) return;
+  async _moRemoveItem(orderId, idx) {
+        const o = this.orders[orderId];
+        if (!o?.items || o.items.length <= 1) { this.toast('لا يمكن حذف الصنف الوحيد', 'error'); return; }
+        if (!confirm('حذف هذا الصنف من الطلب؟')) return;
 
-        const itemToRemove = o.items[idx];
-        const newItems = o.items.filter((_, i) => i !== idx);
-        const updates = {
-            [`jawaher_orders/${orderId}/items`]: newItems,
-            [`jawaher_orders/${orderId}/qty`]: newItems.reduce((s, it) => s + this._safeQty(it.qty, 1), 0),
-            ...Object.fromEntries(Object.entries(this._itemRowsFirstItemPatch(newItems)).map(([k, v]) => [`jawaher_orders/${orderId}/${k}`, v])),
-        };
+        const itemToRemove = o.items[idx];
+        const newItems = o.items.filter((_, i) => i !== idx);
+        const updates = {};
 
-        if (o.stockDeducted) {
-            const plan = this._stockDeltaPlan([itemToRemove], 'return');
-            if (!plan.ok) { this.toast(plan.message, 'error'); return; }
-            Object.assign(updates, plan.updates);
-        }
+        // 1. تحديث بيانات الطلب (الأصناف والكمية الإجمالية)
+        updates[`jawaher_orders/${orderId}/items`] = newItems;
+        updates[`jawaher_orders/${orderId}/qty`] = newItems.reduce((s, it) => s + (it.qty || 1), 0);
 
-        try {
-            await update(ref(db), updates);
-            this.log('edit', orderId, `حذف صنف idx:${idx} من الطلب${o.stockDeducted ? ' مع إرجاع المخزون' : ''}`);
-            this.toast('تم حذف الصنف وتحديث الطلب ✓', 'success');
-            this.openOrderModal(orderId);
-        } catch (err) {
-            console.error(err);
-            this.toast(err?.message || 'فشل حذف الصنف', 'error');
-        }
-    },
+        // 2. إرجاع المخزون إذا كان الطلب مسلماً أو مخصوماً مسبقاً
+        if (o.stockDeducted || o.status === 'done' || o.status === 'delivered') {
+            const wItem = this.warehouse[itemToRemove.itemId];
+            if (wItem) {
+                let keyToReturn = itemToRemove.exactKey || itemToRemove.size;
+                
+                // البحث عن المفتاح الصحيح إذا كان مسجلاً بصيغة (المقاس - اللون)
+                if (wItem.sizes && wItem.sizes[keyToReturn] === undefined && itemToRemove.itemColor) {
+                    if (wItem.sizes[`${itemToRemove.size} - ${itemToRemove.itemColor}`] !== undefined) {
+                        keyToReturn = `${itemToRemove.size} - ${itemToRemove.itemColor}`;
+                    }
+                }
+                
+                const currentStock = wItem.sizes?.[keyToReturn] || 0;
+                const qtyToReturn = parseInt(itemToRemove.qty) || 1;
+                
+                updates[`jawaher_warehouse/${itemToRemove.itemId}/sizes/${keyToReturn}`] = currentStock + qtyToReturn;
+                this.log('stock_return', orderId, `إرجاع ${qtyToReturn} قطعة من ${wItem.name} بسبب حذف صنف من طلب مخصوم`);
+            }
+        }
 
+        // تنفيذ جميع التحديثات دفعة واحدة
+        await update(ref(db), updates);
+        
+        this.log('edit', orderId, `حذف صنف idx:${idx} من الطلب`);
+        this.toast('تم حذف الصنف (وإرجاع الكمية للمستودع إن لزم الأمر) ✓', 'success');
+        this.openOrderModal(orderId);
+    },
         async moveOrder(id, status) {
         const o = this.orders[id]; if (!o) return;
         const before = { status: o.status, stockDeducted: !!o.stockDeducted };
@@ -2400,7 +2129,7 @@ async deductStock(orderId) {
                 size: o.size, qty: o.qty
             }];
             const bcId  = `bc${idx}`;
-            const bcVal = this._orderPolicyBarcode(id, o);
+            const bcVal = id.slice(-12).toUpperCase();
 
             let sellPrice = '';
             // sellPrice removed from label per request — only total price shown
@@ -2445,7 +2174,7 @@ async deductStock(orderId) {
         <div class="lwarn">⚠ يُمنع فتح الطرد</div>
       </div>
     </div>
-    <div class="lbc"><span class="lbc-code" dir="ltr">${bcVal}</span><svg id="${bcId}"></svg></div>
+    <div class="lbc"><svg id="${bcId}"></svg></div>
   </div>
 </div>`;
             return { html, bcId, bcVal };
@@ -2488,8 +2217,7 @@ body { margin: 0 }
 .lnotes { font-size:7pt; white-space:normal; line-height:1.2 }
 .lwarn  { background:#FFF0F0; border:1.5px solid #C02525; border-radius:3px; padding:2px 4px; font-size:7.5pt; font-weight:800; color:#C02525; text-align:center; flex-shrink:0; margin-top:auto }
 .lbc    { text-align:center; padding:1px 4px 2px; border-top:1px solid #dde; flex-shrink:0; background:#fff; display:flex; align-items:center; justify-content:center; gap:6px }
-.lbc-code { font-size:8pt; font-weight:800; color:#111; letter-spacing:.8px; border:1px solid #dde; border-radius:3px; padding:1px 4px; background:#f8f8f8 }
-.lbc svg { max-width:100%; height:auto !important; flex:1 }
+.lbc svg { max-width:100%; height:auto !important }
 .lbc-price { font-size:9pt; font-weight:800; color:#1A6B4A; white-space:nowrap; border:1.5px solid #1A6B4A; border-radius:4px; padding:1px 6px; background:#e6f4ed }`;
 
         // الطباعة: نرسم كل الباركودات أولاً ثم نطبع بعد تأخير كافٍ
@@ -2509,7 +2237,7 @@ ${labelsHtml}
       try {
         JsBarcode('#' + barcodes[i].id, barcodes[i].val, {
           format: 'CODE128', width: 1.3, height: 26,
-          displayValue: false, fontSize: 10, margin: 2, background: 'transparent',
+          displayValue: true, fontSize: 10, margin: 2, background: 'transparent',
           textAlign: 'center', font: 'Almarai'
         });
         // Force LTR on the barcode SVG text
@@ -2549,13 +2277,7 @@ ${labelsHtml}
         return Object.entries(this.orders).filter(([id, o]) => {
             // ── Data-level restriction: User sees only their orders ──
             if (isUserOnly && o.entryUser !== this.userName) return false;
-            if (q && !(
-                (o.custName || '').toLowerCase().includes(q)
-                || (o.custMob || '').includes(q)
-                || id.toLowerCase().includes(q)
-                || this._orderPolicyBarcode(id, o).toLowerCase().includes(q)
-                || this._itemsOf(o).some(x => (x.itemName || '').toLowerCase().includes(q))
-            )) return false;
+            if (q && !((o.custName || '').toLowerCase().includes(q) || (o.custMob || '').includes(q) || id.includes(q))) return false;
             if (st && o.status !== st) return false;
             if (it && !this._itemsOf(o).some(x => x.itemName === it)) return false;
             if (pg && o.pageName !== pg) return false;
@@ -2910,10 +2632,11 @@ ${labelsHtml}
                 return;
             }
             if (!sz) continue;
-            if (!b) b = this._generateBarcode(null, null, usedBarcodes);
-            if (usedBarcodes.has(b)) { this.toast(`الباركود ${b} مكرر في نفس المنتج`, 'error'); return; }
-            if (this._barcodeExists(b)) { this.toast(`الباركود ${b} مستخدم مسبقاً`, 'error'); return; }
+            if (!b) b = this._generateBarcode();
+            if (usedBarcodes.has(b)) { this.toast(`Ø§Ù„Ø¨Ø§Ø±ÙƒÙˆØ¯ ${b} Ù…ÙƒØ±Ø± ÙÙŠ Ù†ÙØ³ Ø§Ù„Ù…Ù†ØªØ¬`, 'error'); return; }
             usedBarcodes.add(b);
+            const existing = Object.values(this.warehouse).find(w => w.barcode === b || (w.variations && Object.values(w.variations).some(v => v.barcode === b)));
+            if (existing) { this.toast(`الباركود ${b} مستخدم مسبقاً`, 'error'); return; }
             const key = c ? `${sz} - ${c}` : sz;
             sizes[key] = (sizes[key] || 0) + qty;
             variations[key] = { size: sz, color: c, hex, barcode: b };
@@ -3217,8 +2940,13 @@ ${labelsHtml}
         if (val === null) return;
         const clean = val.trim().toUpperCase();
         if (!clean) { this.toast('الباركود لا يمكن أن يكون فارغاً', 'error'); return; }
-        // فحص التكرار مع تجاهل نفس الباركود الجاري تعديله فقط
-        if (this._barcodeExists(clean, itemId, varKey || null)) { this.toast(`الباركود ${clean} مستخدم مسبقاً`, 'error'); return; }
+        // فحص التكرار (تجاهل نفس الصنف)
+        const dup = Object.entries(this.warehouse).find(([id, w]) => {
+            if (id === itemId) return false;
+            if (w.barcode === clean) return true;
+            return Object.values(w.variations || {}).some(v => v.barcode === clean);
+        });
+        if (dup) { this.toast(`الباركود ${clean} مستخدم في صنف آخر`, 'error'); return; }
         const path = varKey
             ? `jawaher_warehouse/${itemId}/variations/${varKey}/barcode`
             : `jawaher_warehouse/${itemId}/barcode`;
@@ -3497,11 +3225,10 @@ for (const row of this.pSizeData) {
 
         let targetId = existingId;
         let isNewItem = false;
-        let mainBarcodeForNewItem = manualBarcode || '';
         if (!targetId) {
             isNewItem = true;
-            mainBarcodeForNewItem = manualBarcode || this._generateBarcode();
-            const newRef = await push(warehouseRef, { name: newName, buyPrice, sellPrice, pageName, color, barcode: mainBarcodeForNewItem, sizes: {}, sizeColors: {}, createdAt: Date.now() });
+            const barcode = manualBarcode || this._generateBarcode();
+            const newRef = await push(warehouseRef, { name: newName, buyPrice, sellPrice, pageName, color, barcode, sizes: {}, sizeColors: {}, createdAt: Date.now() });
             targetId = newRef.key;
         }
         // للمنتج الجديد: الكاش المحلي لم يُحدَّث بعد، نبني البيانات من الجلسة الحالية
@@ -3513,10 +3240,10 @@ for (const row of this.pSizeData) {
         Object.entries(sizes).forEach(([s, q]) => { mergedSizes[s] = (mergedSizes[s] || 0) + q; });
         const mergedSizeColors = { ...existingSizeColors, ...sizeColors };
         const mergedVariations = { ...existingVariations };
-        const generatedPurchaseBarcodes = new Set(mainBarcodeForNewItem ? [mainBarcodeForNewItem] : []);
+        const generatedPurchaseBarcodes = new Set();
         Object.entries(variations).forEach(([key, v]) => {
-            let barcode = mergedVariations[key]?.barcode || this._generateBarcode(targetId, key, generatedPurchaseBarcodes);
-            while (generatedPurchaseBarcodes.has(barcode)) barcode = this._generateBarcode(targetId, key, generatedPurchaseBarcodes);
+            let barcode = mergedVariations[key]?.barcode || this._generateBarcode(targetId, key);
+            while (generatedPurchaseBarcodes.has(barcode)) barcode = this._generateBarcode(targetId, key);
             generatedPurchaseBarcodes.add(barcode);
             mergedVariations[key] = {
                 ...mergedVariations[key],
@@ -3572,14 +3299,11 @@ for (const row of this.pSizeData) {
     scanReturnBarcode() {
         const code = document.getElementById('retBarcodeScanner').value.trim().toUpperCase();
         if (!code) return;
-        const found = Object.entries(this.orders).find(([id, o]) => {
-            const policy = this._orderPolicyBarcode(id, o);
-            return policy === code || policy.includes(code) || id.slice(-12).toUpperCase().includes(code) || id.slice(-8).toUpperCase() === code;
-        });
+        const found = Object.entries(this.orders).find(([id]) => id.slice(-12).toUpperCase().includes(code) || id.slice(-8).toUpperCase() === code);
         if (found) { this.selectReturnOrder(found[0], found[1]); document.getElementById('retBarcodeScanner').value = ''; this.toast('تم العثور على الطلب', 'success'); return; }
         const itemFound = Object.entries(this.warehouse).find(([, w]) => w.barcode?.toUpperCase() === code || (w.variations && Object.values(w.variations).some(v => v.barcode?.toUpperCase() === code)));
         if (itemFound) {
-            const ordersByItem = Object.entries(this.orders).filter(([, o]) => this._itemsOf(o).some(it => it.itemId === itemFound[0]) && o.status !== 'canceled');
+            const ordersByItem = Object.entries(this.orders).filter(([, o]) => o.itemId === itemFound[0] && o.status !== 'canceled');
             if (ordersByItem.length === 1) this.selectReturnOrder(ordersByItem[0][0], ordersByItem[0][1]);
             else if (ordersByItem.length > 1) this.showReturnResults(ordersByItem);
             else this.toast('لا توجد طلبات لهذا المنتج', 'error');
@@ -3594,11 +3318,7 @@ for (const row of this.pSizeData) {
         this.retSelectedOrderId = null; form.style.display = 'none'; preview.style.display = 'none'; resultsEl.style.display = 'none';
         if (q.length < 2) return;
         const matches = Object.entries(this.orders).filter(([id, o]) =>
-            this._orderPolicyBarcode(id, o).toLowerCase().includes(q)
-            || id.slice(-8).toLowerCase().includes(q)
-            || (o.custName || '').toLowerCase().includes(q)
-            || (o.custMob || '').includes(q)
-            || this._itemsOf(o).some(it => (it.itemName || '').toLowerCase().includes(q))
+            id.slice(-8).toLowerCase().includes(q) || (o.custName || '').toLowerCase().includes(q) || (o.custMob || '').includes(q) || (o.itemName || '').toLowerCase().includes(q)
         ).slice(0, 8);
         if (matches.length === 0) { resultsEl.style.display = 'block'; resultsEl.innerHTML = `<div style="padding:.75rem;font-size:.85rem;color:var(--ink-mid);text-align:center"><i class="fas fa-search-minus"></i> لم يتم العثور على نتائج</div>`; return; }
         if (matches.length === 1) { this.selectReturnOrder(matches[0][0], matches[0][1]); return; }
@@ -3739,14 +3459,14 @@ updateRetSizes(itemIdx) {
         const finalItems = updatedItems.filter(it => it.qty > 0);
         
         updates[`jawaher_orders/${orderId}/items`] = finalItems.length > 0 ? finalItems : null;
-        updates[`jawaher_orders/${orderId}/qty`] = finalItems.reduce((sum, it) => sum + this._safeQty(it.qty, 1), 0);
-
+        updates[`jawaher_orders/${orderId}/qty`] = finalItems.reduce((sum, it) => sum + (it.qty || 1), 0);
+        
+        // إذا تم إرجاع كل الأصناف، نغير الحالة لملغي (canceled)، وإلا نتركه مؤجل
         if (finalItems.length === 0) {
             updates[`jawaher_orders/${orderId}/status`] = 'canceled';
             updates[`jawaher_orders/${orderId}/stockDeducted`] = false;
-            Object.assign(updates, Object.fromEntries(Object.entries(this._itemRowsFirstItemPatch([])).map(([k, v]) => [`jawaher_orders/${orderId}/${k}`, v])));
         } else {
-            Object.assign(updates, Object.fromEntries(Object.entries(this._itemRowsFirstItemPatch(finalItems)).map(([k, v]) => [`jawaher_orders/${orderId}/${k}`, v])));
+            updates[`jawaher_orders/${orderId}/status`] = 'postponed';
             updates[`jawaher_orders/${orderId}/stockDeducted`] = !!o.stockDeducted;
         }
 
@@ -4284,7 +4004,7 @@ updateRetSizes(itemIdx) {
         const delta = realQty - currentQty;
         const isExistingVariation = Object.prototype.hasOwnProperty.call(item.variations || {}, key);
         const barcode = typedBarcode || (isExistingVariation ? item.variations[key]?.barcode : '') || this._generateBarcode(itemId, key);
-        if (typedBarcode && this._barcodeExists(typedBarcode, itemId, key)) { this.toast(`الباركود ${typedBarcode} مستخدم مسبقاً`, 'error'); return; }
+        if (typedBarcode && this._barcodeExists(typedBarcode, itemId, key)) { this.toast(`Ø§Ù„Ø¨Ø§Ø±ÙƒÙˆØ¯ ${typedBarcode} Ù…Ø³ØªØ®Ø¯Ù… Ù…Ø³Ø¨Ù‚Ø§Ù‹`, 'error'); return; }
 
         if (delta === 0) {
             this.toast('الكمية الفعلية مطابقة للمخزون — لا حاجة لتصحيح', 'info');
@@ -5062,10 +4782,24 @@ updateRetSizes(itemIdx) {
             this._wiz.weightKg = document.getElementById('wiz_weight')?.value.trim() || '';
             this._wiz.lengthCm = document.getElementById('wiz_length')?.value.trim() || '';
         } else if (s === 4) {
-            const collected = this._collectItemRows(document.querySelector('#wiz-body #eItemsList'));
-            if (!collected.ok) { this._wizErr(collected.message); return; }
-            const items = collected.items;
-
+            // Collect items from rows
+            const items = [];
+            const rows = document.querySelectorAll('.ir-item');
+            for (let i = 0; i < rows.length; i++) {
+                const itemName = rows[i].value;
+                const found = Object.entries(this.warehouse).find(([,w]) => w.name === itemName);
+                if (!found) { this._wizErr(`يرجى اختيار منتج للصف ${i+1}`); return; }
+                const sizeCombo = document.querySelector(`.ir-size[data-idx="${i}"]`)?.value;
+                const color = document.getElementById(`ir_color_${i}`)?.value || '';
+                const qty = parseInt(document.querySelector(`.ir-qty[data-idx="${i}"]`)?.value) || 1;
+                if (!sizeCombo || !color) { this._wizErr(`يرجى تحديد اللون والمقاس للصف ${i+1}`); return; }
+                const avail = found[1].sizes?.[sizeCombo] || 0;
+                if (qty > avail) { this._wizErr(`الكمية (${qty}) غير متوفرة لـ ${found[1].name}، المتوفر: ${avail}`); return; }
+                let finalSize = sizeCombo, finalColor = color;
+                if (sizeCombo.includes(' - ')) { finalSize = sizeCombo.split(' - ')[0]; finalColor = sizeCombo.split(' - ')[1]; }
+                items.push({ itemId: found[0], itemName: found[1].name, itemColor: finalColor, size: finalSize, exactKey: sizeCombo, qty });
+            }
+            if (items.length === 0) { this._wizErr('أضف منتجاً واحداً على الأقل'); return; }
             const stockPlan = this._stockDeltaPlan(items, 'deduct');
             if (!stockPlan.ok) { this._wizErr(stockPlan.message); return; }
             this._wiz.collectedItems = items;
@@ -5109,18 +4843,14 @@ updateRetSizes(itemIdx) {
         if (items.length === 0) { this._wizErr('لا توجد منتجات'); return; }
 
         const entryUser = this.role === 'User' ? this.userName : (w.entryUser || this.userName);
-        const policyBarcode = this._generatePolicyBarcode();
         const payload = {
-            timestamp: Date.now(),
-            policyBarcode,
-            waybillBarcode: policyBarcode,
-            date: new Date().toLocaleDateString('en-GB'),
+            timestamp: Date.now(), date: new Date().toLocaleDateString('en-GB'),
             custName: w.custName, custMob: '07' + w.mobile,
             country: 'الأردن', governorate: w.governorate, custAddr: w.addr,
-            ...this._itemRowsFirstItemPatch(items),
+            itemId: items[0].itemId, itemName: items[0].itemName,
+            itemColor: items[0].itemColor, size: items[0].size, exactKey: items[0].exactKey, qty: items[0].qty,
             items, price: w.price, currency: 'JOD',
             pageName: w.pageName, entryUser, tags: w.tags, status: 'new',
-            stockDeducted: true,
             contactChannel: w.contactChannel || '',
             weightKg: w.weightKg || '',
             lengthCm: w.lengthCm || '',
@@ -5130,36 +4860,26 @@ updateRetSizes(itemIdx) {
         if (!stockPlan.ok) { this._wizErr(stockPlan.message); return; }
 
         const btn = document.getElementById('wiz-nav')?.querySelector('button:last-child');
-        const oldHtml = btn?.innerHTML;
-        try {
-            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ الحفظ...'; }
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ الحفظ...'; }
 
-            const newRef = push(ordersRef);
-            const updates = { [`jawaher_orders/${newRef.key}`]: payload, ...stockPlan.updates };
-            await update(ref(db), updates);
-            this.lastOrderId = newRef.key;
-            this.log('create', newRef.key, `إنشاء طلب للزبون: ${w.custName} | صفحة: ${w.pageName}`);
-            this._auditLog('order_create', newRef.key, null, payload, `طلب جديد للزبون ${w.custName}`);
+        const newRef = await push(ordersRef, payload);
+        this.lastOrderId = newRef.key;
+        // خصم المخزون فوراً
+        await this.deductStockDirect(newRef.key, payload);
+        this.log('create', newRef.key, `إنشاء طلب للزبون: ${w.custName} | صفحة: ${w.pageName}`);
+        this._auditLog('order_create', newRef.key, null, payload, `طلب جديد للزبون ${w.custName}`);
 
-            document.getElementById('wiz-shell').style.display = 'none';
-            const success = document.getElementById('wiz-success');
-            success.style.display = 'flex';
-            document.getElementById('wiz-success-summary').innerHTML = `
-                <div class="wiz-summary-row"><span class="wiz-summary-label">الزبون</span><span class="wiz-summary-val">${this._escapeHtml(w.custName)}</span></div>
-                <div class="wiz-summary-row"><span class="wiz-summary-label">الموبايل</span><span class="wiz-summary-val" dir="ltr">07${this._escapeHtml(w.mobile)}</span></div>
-                <div class="wiz-summary-row"><span class="wiz-summary-label">المحافظة</span><span class="wiz-summary-val">${this._escapeHtml(w.governorate)}</span></div>
-                <div class="wiz-summary-row"><span class="wiz-summary-label">السعر</span><span class="wiz-summary-val" style="color:var(--emerald);font-weight:800">${this._escapeHtml(w.price)} JOD</span></div>
-                ${items.map(it=>`<div class="wiz-summary-row"><span class="wiz-summary-label">${this._escapeHtml(it.itemName)}</span><span class="wiz-summary-val">${this._escapeHtml(it.itemColor)} — ${this._escapeHtml(it.size)} × ${this._escapeHtml(it.qty)}</span></div>`).join('')}`;
-            this.toast('تم حفظ الطلب بنجاح ✓', 'success');
-        } catch (err) {
-            console.error(err);
-            this._wizErr(err?.message || 'فشل حفظ الطلب. تحقق من الاتصال والصلاحيات.');
-        } finally {
-            if (btn && document.getElementById('wiz-shell')?.style.display !== 'none') {
-                btn.disabled = false;
-                btn.innerHTML = oldHtml || '<i class="fas fa-check-circle"></i> تأكيد وحفظ الطلب';
-            }
-        }
+        // Show success screen
+        document.getElementById('wiz-shell').style.display = 'none';
+        const success = document.getElementById('wiz-success');
+        success.style.display = 'flex';
+        document.getElementById('wiz-success-summary').innerHTML = `
+            <div class="wiz-summary-row"><span class="wiz-summary-label">الزبون</span><span class="wiz-summary-val">${w.custName}</span></div>
+            <div class="wiz-summary-row"><span class="wiz-summary-label">الموبايل</span><span class="wiz-summary-val" dir="ltr">07${w.mobile}</span></div>
+            <div class="wiz-summary-row"><span class="wiz-summary-label">المحافظة</span><span class="wiz-summary-val">${w.governorate}</span></div>
+            <div class="wiz-summary-row"><span class="wiz-summary-label">السعر</span><span class="wiz-summary-val" style="color:var(--emerald);font-weight:800">${w.price} JOD</span></div>
+            ${items.map(it=>`<div class="wiz-summary-row"><span class="wiz-summary-label">${it.itemName}</span><span class="wiz-summary-val">${it.itemColor} — ${it.size} × ${it.qty}</span></div>`).join('')}`;
+        this.toast('تم حفظ الطلب بنجاح ✓', 'success');
     },
 
     // ══════════════════════════════════════════════════════════
@@ -5905,6 +5625,19 @@ document.addEventListener('DOMContentLoaded', () => {
     app.initKeys();
     app.initSmartChrome();
     app.renderSavedAccounts();
+    const rememberedUser = localStorage.getItem('shmRememberLastUser');
+    if (rememberedUser && !saved) {
+        const loginUser = document.getElementById('loginUser');
+        const loginPass = document.getElementById('loginPass');
+        const remember = document.getElementById('rememberMe');
+        const rememberedAccount = app._getSavedAccounts().find(a => a.u === rememberedUser);
+        if (loginUser) loginUser.value = rememberedUser;
+        if (loginPass && rememberedAccount?.p) loginPass.value = app._decodeSavedPassword(rememberedAccount.p);
+        if (remember && !remember.checked) {
+            remember.checked = true;
+            app.toggleRememberMe();
+        }
+    }
 
     // ── Register Service Worker + Auto-Update System ─────────────
     if ('serviceWorker' in navigator) {

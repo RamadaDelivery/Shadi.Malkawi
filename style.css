@@ -1527,25 +1527,28 @@ tr.usr-disabled { opacity: .5; }
     min-height: 58px;
     padding: .72rem .9rem .72rem 1.05rem;
     border-radius: 999px;
-    background: linear-gradient(135deg, var(--gold-light), var(--gold) 52%, var(--gold-dark));
-    color: #141827;
-    box-shadow: 0 16px 38px rgba(201,168,76,.34), 0 5px 14px rgba(0,0,0,.18);
+    background: linear-gradient(135deg, #111827, #172033 54%, #0f172a);
+    color: #ffffff;
+    border: 2px solid #F3D77A;
+    box-shadow: 0 18px 42px rgba(0,0,0,.34), 0 0 0 4px rgba(243,215,122,.18);
     font-weight: 900;
     letter-spacing: -.01em;
+    text-shadow: 0 1px 2px rgba(0,0,0,.45);
     transform: translateY(130%) scale(.92);
     opacity: 0;
-    transition: transform .28s var(--ease-out), opacity .22s, box-shadow .22s, bottom .24s, filter .22s;
+    transition: transform .28s var(--ease-out), opacity .22s, box-shadow .22s, bottom .24s, filter .22s, border-color .22s;
 }
 .delivery-fab.is-visible { display: inline-flex; transform: translateY(0) scale(1); opacity: 1; }
-.delivery-fab:hover { filter: brightness(1.04); box-shadow: 0 20px 46px rgba(201,168,76,.42), 0 8px 20px rgba(0,0,0,.22); }
+.delivery-fab:hover { filter: brightness(1.05); border-color: #FFE59B; box-shadow: 0 22px 52px rgba(0,0,0,.42), 0 0 0 5px rgba(243,215,122,.24); }
 .delivery-fab:active { transform: translateY(1px) scale(.98); }
 .delivery-fab__icon {
     width: 34px; height: 34px; border-radius: 50%;
     display: grid; place-items: center;
-    background: rgba(20,24,39,.12);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+    background: #F3D77A;
+    color: #101624;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 2px 8px rgba(0,0,0,.24);
 }
-.delivery-fab__label { font-size: .88rem; white-space: nowrap; }
+.delivery-fab__label { font-size: .9rem; white-space: nowrap; color: #fff; }
 .nav-reveal-pill {
     left: 50%;
     bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
@@ -1588,167 +1591,14 @@ tr.usr-disabled { opacity: .5; }
 }
 
 /* Better contrast for saved accounts / remember-me area on the dark login card */
-.auth-muted-label { color: rgba(255,255,255,.72) !important; }
+.auth-muted-label { color: rgba(255,255,255,.86) !important; font-weight: 800; }
+.remember-label { color: rgba(255,255,255,.88) !important; font-weight: 800; }
 .saved-account-card {
-    background: rgba(255,255,255,.09) !important;
-    border-color: rgba(201,168,76,.34) !important;
+    background: rgba(255,255,255,.12) !important;
+    border-color: rgba(243,215,122,.52) !important;
 }
-.saved-account-card:hover { background: rgba(201,168,76,.16) !important; }
-.saved-account-name { color: #fff !important; font-weight: 800; text-shadow: 0 1px 10px rgba(0,0,0,.28); }
-.saved-account-action { color: rgba(255,255,255,.64) !important; }
-.saved-account-other { color: rgba(255,255,255,.78) !important; font-weight: 700; }
-
-
-/* ============ ORDER ADD ITEMS FULLSCREEN MODAL ============ */
-#addItemToOrderModal {
-    z-index: 920;
-    align-items: stretch;
-    justify-content: center;
-}
-#addItemToOrderModal .modal-overlay {
-    background: rgba(10,10,20,.72);
-}
-.order-add-fullsheet {
-    width: min(1180px, calc(100vw - 28px));
-    max-width: none !important;
-    height: calc(100dvh - 28px);
-    max-height: none !important;
-    margin: 14px auto;
-    border-radius: 22px !important;
-    padding: 0 !important;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-.order-add-header,
-.order-add-footer {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 1rem 1.15rem;
-    background: var(--paper-warm);
-    border-bottom: 1px solid var(--border);
-}
-.order-add-footer {
-    border-bottom: 0;
-    border-top: 1px solid var(--border);
-    background: var(--paper);
-}
-.order-add-title {
-    margin: 0 !important;
-    font-size: 1.15rem;
-}
-.order-add-subtitle {
-    color: var(--ink-mid);
-    font-size: .82rem;
-    margin-top: .25rem;
-}
-.order-add-body {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 1rem 1.15rem 1.25rem;
-}
-#addItemToOrderModal .item-row-card {
-    padding: 1rem !important;
-    margin-bottom: .85rem !important;
-}
-#addItemToOrderModal .item-row-fields {
-    grid-template-columns: minmax(260px,2fr) minmax(170px,1.1fr) minmax(170px,1.1fr) minmax(130px,.8fr);
-    gap: .85rem;
-}
-#addItemToOrderModal .form-control-j,
-#addItemToOrderModal .select-j {
-    min-height: 48px;
-    font-size: .95rem;
-}
-#addItemToOrderModal .add-item-row-btn {
-    width: 100%;
-    min-height: 48px;
-}
-@media (max-width: 760px) {
-    #addItemToOrderModal { align-items: stretch; }
-    .order-add-fullsheet {
-        width: 100vw;
-        height: 100dvh;
-        margin: 0;
-        border-radius: 0 !important;
-    }
-    .order-add-header {
-        align-items: flex-start;
-        padding: .9rem 1rem;
-    }
-    .order-add-subtitle { display: none; }
-    .order-add-body { padding: .85rem; }
-    .order-add-footer {
-        padding: .8rem;
-        flex-direction: column;
-    }
-    .order-add-footer .btn-j { width: 100%; }
-    #addItemToOrderModal .item-row-fields {
-        grid-template-columns: 1fr !important;
-    }
-    #addItemToOrderModal .item-row-product,
-    #addItemToOrderModal .item-row-color,
-    #addItemToOrderModal .item-row-size,
-    #addItemToOrderModal .item-row-qty {
-        grid-column: auto !important;
-    }
-}
-
-/* ============================================================
-   FINAL OVERRIDE — Add Items To Existing Order Fullscreen
-   Reason: force the edit-order add-items popup to be a real fullscreen workspace.
-   ============================================================ */
-body.add-item-modal-open {
-    overflow: hidden !important;
-}
-#addItemToOrderModal,
-#addItemToOrderModal.modal-j.open {
-    display: flex !important;
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100vw !important;
-    height: 100dvh !important;
-    align-items: stretch !important;
-    justify-content: center !important;
-    z-index: 99999 !important;
-    padding: 0 !important;
-}
-#addItemToOrderModal .order-add-fullscreen-sheet {
-    width: min(1180px, 100vw) !important;
-    height: 100dvh !important;
-    max-width: none !important;
-    max-height: none !important;
-    margin: 0 auto !important;
-    border-radius: 0 !important;
-    padding: 0 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    overflow: hidden !important;
-    background: var(--paper) !important;
-}
-#addItemToOrderModal .order-add-fullscreen-body {
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    overflow-y: auto !important;
-}
-#addItemToOrderModal .item-row-fields {
-    display: grid !important;
-    grid-template-columns: minmax(260px,2fr) minmax(190px,1.15fr) minmax(180px,1.05fr) minmax(150px,.75fr) !important;
-    gap: .9rem !important;
-}
-@media (max-width: 760px) {
-    #addItemToOrderModal .item-row-fields {
-        grid-template-columns: 1fr !important;
-    }
-    #addItemToOrderModal .item-row-product,
-    #addItemToOrderModal .item-row-color,
-    #addItemToOrderModal .item-row-size,
-    #addItemToOrderModal .item-row-qty {
-        grid-column: 1 / -1 !important;
-        width: 100% !important;
-    }
-}
+.saved-account-card:hover { background: rgba(243,215,122,.18) !important; border-color: rgba(243,215,122,.78) !important; }
+.saved-account-name { color: #fff !important; font-weight: 900; text-shadow: 0 1px 10px rgba(0,0,0,.34); }
+.saved-account-badge { color: #101624; background:#F3D77A; font-size:.65rem; font-weight:900; border-radius:999px; padding:.18rem .45rem; white-space:nowrap; }
+.saved-account-action { color: rgba(255,255,255,.82) !important; }
+.saved-account-other { color: rgba(255,255,255,.9) !important; font-weight: 800; }

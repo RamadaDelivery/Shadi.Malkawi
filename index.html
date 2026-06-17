@@ -23,8 +23,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
 
     <!-- ── App Styles ─────────────────────────────────────── -->
-    <link rel="stylesheet" href="style.css?v=20260616-3">
-    <link rel="stylesheet" href="style-shm.css?v=20260616-3">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style-shm.css">
 </head>
 
 <body>
@@ -102,7 +102,7 @@
                         <i class="fas fa-check" style="color:#C9A84C;font-size:.7rem;display:none;"></i>
                     </div>
                     <input type="checkbox" id="rememberMe" style="display:none;" onchange="app.toggleRememberMe()">
-                    <span style="color:rgba(255,255,255,.55);font-size:.85rem;user-select:none;">تذكّرني</span>
+                    <span class="remember-label" style="color:rgba(255,255,255,.88);font-size:.85rem;user-select:none;">تذكّرني</span>
                 </div>
 
                 <button type="submit" class="btn-auth">دخول &nbsp;<i class="fas fa-arrow-left"></i></button>
@@ -308,7 +308,7 @@
                     </div>
 
                     <!-- Hidden items list container (used by renderItemRows) -->
-                    <div id="legacyItemsList" style="display:none"></div>
+                    <div id="eItemsList" style="display:none"></div>
                 </div>
 
                 <!-- Success Screen (shown after save) -->
@@ -574,8 +574,8 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label-j">باركود المنتج</label>
-                        <input type="text" id="pBarcode" class="form-control-j" placeholder="مثال: 001234 أو اتركه فارغاً" dir="ltr" style="font-family:monospace;letter-spacing:1px">
-                        <div style="font-size:.72rem;color:var(--ink-mid);margin-top:3px">سيُولَّد تلقائياً بصيغة 00 + 4 أرقام إن تُرك فارغاً</div>
+                        <input type="text" id="pBarcode" class="form-control-j" placeholder="JW12345 أو اتركه فارغاً" dir="ltr" style="font-family:monospace;letter-spacing:1px">
+                        <div style="font-size:.72rem;color:var(--ink-mid);margin-top:3px">سيُولَّد تلقائياً إن تُرك فارغاً</div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label-j">سعر الشراء (JOD)</label>
@@ -1239,7 +1239,7 @@
 
     <!-- ── App Entry Point ─────────────────────────────────── -->
 <!-- ── App Entry Point ─────────────────────────────────── -->
-    <script type="module" src="app.js?v=20260616-3"></script>
+    <script type="module" src="app.js?v=4"></script>
 
 </body>
 </html>
