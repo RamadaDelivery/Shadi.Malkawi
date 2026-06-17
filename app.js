@@ -391,6 +391,10 @@ window.app = {
 
     // ============ NAVIGATION ============
     gotoPage(id) {
+        if (id === 'definitions' || id === 'users') id = 'settings';
+        if (id === 'audit') id = 'logs';
+        if (id === 'transfer') id = 'warehouse';
+
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById('page-' + id)?.classList.add('active');
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === id));
@@ -402,13 +406,10 @@ window.app = {
         if (id === 'warehouse') this.renderWarehouse();
         if (id === 'purchase') this.renderPurchasePage();
         if (id === 'returns') this.renderReturnsList();
-        if (id === 'definitions') this.renderDefinitions();
+        if (id === 'settings') { this.renderDefinitions(); if (this.role === 'Admin') this.renderUsersPage(); }
         if (id === 'logs') this.renderLogs();
-        if (id === 'transfer')     this.renderTransferPage();
-        if (id === 'movement')    this.renderMovementTable();
+        if (id === 'movement') this.renderMovementTable();
         if (id === 'customers')   { if (this.role === 'Admin') this.renderCustomers(); }
-        if (id === 'users')       { if (this.role === 'Admin') this.renderUsersPage(); }
-        if (id === 'audit')       { if (this.role === 'Admin') this.renderAuditPage(); }
         this._setNavigationHidden(false);
         this._updateDeliveryFab(true);
         this.closeAllDropdowns();
@@ -416,58 +417,232 @@ window.app = {
 
 
 
-    // ============ SMART NAV + FLOATING NEW DELIVERY ==========
-    _setNavigationHidden(hidden) {
+    // ============ STABLE NAV + CONTEXTUAL QUICK ACTIONS ==========
+    _setNavigationHidden(hidden = false) {
         const appVisible = document.getElementById('appContainer')?.style.display !== 'none';
         const topbar = document.querySelector('.topbar');
         const desktopNav = document.getElementById('desktopNav');
         const bottomNav = document.getElementById('bottomNav');
         const reveal = document.getElementById('navRevealPill');
         const fab = document.getElementById('deliveryFab');
-        [topbar, desktopNav, bottomNav].forEach(el => el?.classList.toggle('nav-hidden', !!hidden));
-        reveal?.classList.toggle('is-visible', !!hidden && appVisible);
-        fab?.classList.toggle('nav-is-hidden', !!hidden);
+
+        // التنقل أصبح ثابتاً دائماً: لا نخفيه أثناء التمرير حتى لا يضيع المستخدم بين الصفحات.
+        [topbar, desktopNav, bottomNav].forEach(el => el?.classList.remove('nav-hidden'));
+        reveal?.classList.remove('is-visible');
+        fab?.classList.remove('nav-is-hidden');
+        if (!appVisible) this._closeQuickFabMenu?.();
+    },
+
+    _currentPageId() {
+        const active = document.querySelector('.page.active');
+        return (active?.id || 'page-dashboard').replace('page-', '');
+    },
+
+    isPageAllowed(page) {
+        if (!page) return true;
+        if (this.role === 'Admin') return true;
+        const btn = document.querySelector(`.nav-btn[data-page="${page}"]`);
+        if (!btn) return true;
+        return window.getComputedStyle(btn).display !== 'none';
+    },
+
+    _fabCanExport() {
+        return this.role === 'Admin' || this._can?.('canExport') === true;
+    },
+
+    _fabCanManageStock() {
+        return this.role === 'Admin' || this._can?.('canManageStock') === true || this.isPageAllowed('warehouse');
+    },
+
+    _getQuickFabActions(page = this._currentPageId()) {
+        const canEntry = this.isPageAllowed('entry');
+        const canOrders = this.isPageAllowed('orders');
+        const canReports = this.isPageAllowed('reports');
+        const canWarehouse = this._fabCanManageStock();
+        const canExport = this._fabCanExport();
+        const admin = this.role === 'Admin';
+        const add = (arr, item, cond = true) => { if (cond) arr.push(item); };
+        const actions = [];
+
+        switch (page) {
+            case 'dashboard':
+                add(actions, { key: 'newOrder', label: 'طلب جديد', icon: 'fa-plus-circle' }, canEntry);
+                add(actions, { key: 'goOrders', label: 'الطلبات', icon: 'fa-list-alt' }, canOrders);
+                add(actions, { key: 'goReports', label: 'التقارير', icon: 'fa-table' }, canReports);
+                break;
+            case 'orders':
+                add(actions, { key: 'newOrder', label: 'طلب جديد', icon: 'fa-plus-circle' }, canEntry);
+                add(actions, { key: 'goReports', label: 'التقارير', icon: 'fa-table' }, canReports);
+                add(actions, { key: 'exportOrders', label: 'تصدير Excel', icon: 'fa-file-excel' }, canExport);
+                break;
+            case 'entry':
+                add(actions, { key: 'wizardNext', label: 'التالي / حفظ', icon: 'fa-arrow-left' }, true);
+                add(actions, { key: 'goOrders', label: 'الطلبات', icon: 'fa-list-alt' }, canOrders);
+                add(actions, { key: 'printLastOrder', label: 'طباعة آخر طلب', icon: 'fa-print' }, !!this.lastOrderId);
+                break;
+            case 'reports':
+                add(actions, { key: 'exportOrders', label: 'تصدير Excel', icon: 'fa-file-excel' }, canExport);
+                add(actions, { key: 'newOrder', label: 'طلب جديد', icon: 'fa-plus-circle' }, canEntry);
+                add(actions, { key: 'focusReportSearch', label: 'بحث سريع', icon: 'fa-search' }, true);
+                break;
+            case 'warehouse':
+                add(actions, { key: 'newItem', label: 'منتج جديد', icon: 'fa-box-open' }, canWarehouse);
+                add(actions, { key: 'focusWarehouseBarcode', label: 'مسح باركود', icon: 'fa-barcode' }, canWarehouse);
+                add(actions, { key: 'goPurchase', label: 'مشتريات', icon: 'fa-shopping-cart' }, this.isPageAllowed('purchase'));
+                break;
+            case 'purchase':
+                add(actions, { key: 'focusPurchaseBarcode', label: 'مسح باركود', icon: 'fa-barcode' }, canWarehouse);
+                add(actions, { key: 'savePurchase', label: 'حفظ الشراء', icon: 'fa-save' }, canWarehouse);
+                add(actions, { key: 'goWarehouse', label: 'المستودع', icon: 'fa-warehouse' }, canWarehouse);
+                break;
+            case 'returns':
+                add(actions, { key: 'focusReturnBarcode', label: 'مسح مرتجع', icon: 'fa-barcode' }, this.isPageAllowed('returns'));
+                add(actions, { key: 'goOrders', label: 'الطلبات', icon: 'fa-list-alt' }, canOrders);
+                add(actions, { key: 'newOrder', label: 'طلب جديد', icon: 'fa-plus-circle' }, canEntry);
+                break;
+            case 'customers':
+                add(actions, { key: 'exportCustomers', label: 'تصدير العملاء', icon: 'fa-file-excel' }, canExport);
+                add(actions, { key: 'goReports', label: 'التقارير', icon: 'fa-table' }, canReports);
+                add(actions, { key: 'newOrder', label: 'طلب جديد', icon: 'fa-plus-circle' }, canEntry);
+                break;
+            case 'settings':
+                add(actions, { key: 'newUser', label: 'مستخدم جديد', icon: 'fa-user-plus' }, admin);
+                add(actions, { key: 'focusColorName', label: 'لون مخصص', icon: 'fa-palette' }, admin);
+                add(actions, { key: 'goLogs', label: 'السجل', icon: 'fa-file-contract' }, admin);
+                break;
+            case 'logs':
+                add(actions, { key: 'goDashboard', label: 'لوحة القيادة', icon: 'fa-chart-pie' }, true);
+                add(actions, { key: 'goReports', label: 'التقارير', icon: 'fa-table' }, canReports);
+                add(actions, { key: 'newOrder', label: 'طلب جديد', icon: 'fa-plus-circle' }, canEntry);
+                break;
+            case 'movement':
+                add(actions, { key: 'exportMovement', label: 'تصدير الحركة', icon: 'fa-file-excel' }, canExport);
+                add(actions, { key: 'goWarehouse', label: 'المستودع', icon: 'fa-warehouse' }, canWarehouse);
+                break;
+            default:
+                add(actions, { key: 'newOrder', label: 'طلب جديد', icon: 'fa-plus-circle' }, canEntry);
+                add(actions, { key: 'goDashboard', label: 'لوحة القيادة', icon: 'fa-chart-pie' }, true);
+        }
+        return actions.slice(0, 4);
+    },
+
+    _renderQuickFabActions(closeMenu = true) {
+        const fab = document.getElementById('deliveryFab');
+        const menu = document.getElementById('quickFabMenu');
+        if (!fab || !menu) return [];
+        const actions = this._getQuickFabActions();
+        const primary = actions[0] || { label: 'إجراء سريع', icon: 'fa-bolt' };
+        fab.querySelector('.delivery-fab__icon i')?.classList.remove(...Array.from(fab.querySelector('.delivery-fab__icon i')?.classList || []).filter(c => c.startsWith('fa-')));
+        const iconEl = fab.querySelector('.delivery-fab__icon i');
+        if (iconEl) iconEl.className = `fas ${primary.icon || 'fa-bolt'}`;
+        const labelEl = fab.querySelector('.delivery-fab__label');
+        if (labelEl) labelEl.textContent = primary.label;
+        fab.title = primary.label;
+        fab.setAttribute('aria-label', primary.label);
+
+        menu.innerHTML = actions.map(a => `
+            <button type="button" class="quick-fab-action" onclick="app.runQuickFabAction('${a.key}')">
+                <span class="quick-fab-action__icon"><i class="fas ${a.icon || 'fa-bolt'}"></i></span>
+                <span>${a.label}</span>
+            </button>
+        `).join('');
+        if (closeMenu) this._closeQuickFabMenu();
+        return actions;
     },
 
     _updateDeliveryFab(forceShow = false) {
         const fab = document.getElementById('deliveryFab');
         if (!fab) return;
         const appVisible = document.getElementById('appContainer')?.style.display !== 'none';
-        const onEntry = document.getElementById('page-entry')?.classList.contains('active');
-        const canUse = !!this.user && this.isPageAllowed?.('entry') !== false;
-        const show = appVisible && canUse && !onEntry && (forceShow || window.scrollY > 160 || document.body.scrollHeight > window.innerHeight + 220);
+        const actions = this._renderQuickFabActions(false);
+        const show = appVisible && !!this.user && actions.length > 0;
         fab.classList.toggle('is-visible', !!show);
+        document.getElementById('quickFabMenu')?.classList.toggle('is-available', !!show);
+        if (!show) this._closeQuickFabMenu();
     },
 
     initSmartChrome() {
         if (this._smartChromeReady) return;
         this._smartChromeReady = true;
-        let lastY = window.scrollY || 0;
         let ticking = false;
-        const handle = () => {
-            const y = Math.max(0, window.scrollY || 0);
-            const delta = y - lastY;
-            const shouldHide = y > 120 && delta > 6;
-            const shouldShow = delta < -5 || y < 70;
-            if (shouldHide) this._setNavigationHidden(true);
-            if (shouldShow) this._setNavigationHidden(false);
-            this._updateDeliveryFab();
-            lastY = y;
-            ticking = false;
-        };
         window.addEventListener('scroll', () => {
             if (!ticking) {
-                window.requestAnimationFrame(handle);
+                window.requestAnimationFrame(() => {
+                    this._setNavigationHidden(false);
+                    this._updateDeliveryFab();
+                    ticking = false;
+                });
                 ticking = true;
             }
         }, { passive: true });
         window.addEventListener('resize', () => this._updateDeliveryFab(true));
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest?.('#deliveryFab') && !e.target.closest?.('#quickFabMenu')) this._closeQuickFabMenu();
+        });
+        this._setNavigationHidden(false);
         this._updateDeliveryFab(true);
     },
 
     revealNavigation() {
         this._setNavigationHidden(false);
         this._updateDeliveryFab(true);
+    },
+
+    toggleQuickFab(force = null) {
+        const menu = document.getElementById('quickFabMenu');
+        const fab = document.getElementById('deliveryFab');
+        if (!menu || !fab) return;
+        const open = force === null ? !menu.classList.contains('is-open') : !!force;
+        menu.classList.toggle('is-open', open);
+        fab.classList.toggle('is-open', open);
+    },
+
+    _closeQuickFabMenu() {
+        document.getElementById('quickFabMenu')?.classList.remove('is-open');
+        document.getElementById('deliveryFab')?.classList.remove('is-open');
+    },
+
+    handleFabMain() {
+        const actions = this._getQuickFabActions();
+        if (actions.length <= 1) {
+            if (actions[0]) this.runQuickFabAction(actions[0].key);
+            return;
+        }
+        this.toggleQuickFab();
+    },
+
+    runQuickFabAction(key) {
+        this._closeQuickFabMenu();
+        switch (key) {
+            case 'newOrder': this.quickNewDelivery(); break;
+            case 'goOrders': this.gotoPage('orders'); break;
+            case 'goReports': this.gotoPage('reports'); break;
+            case 'goDashboard': this.gotoPage('dashboard'); break;
+            case 'goWarehouse': this.gotoPage('warehouse'); break;
+            case 'goPurchase': this.gotoPage('purchase'); break;
+            case 'goLogs': this.gotoPage('logs'); break;
+            case 'newItem': this.gotoPage('warehouse'); setTimeout(() => this.openNewItemModal(), 120); break;
+            case 'exportOrders': this.exportExcel?.(); break;
+            case 'exportCustomers': this.exportCustomersExcel?.(); break;
+            case 'exportMovement': this.exportMovementExcel?.(); break;
+            case 'newUser': this.openCreateUserModal?.(); break;
+            case 'savePurchase': this.savePurchase?.(); break;
+            case 'printLastOrder': this.printLastOrder?.(); break;
+            case 'wizardNext': this.quickWizardStep(); break;
+            case 'focusWarehouseBarcode': this.gotoPage('warehouse'); setTimeout(() => document.getElementById('wBarcodeScanner')?.focus(), 120); break;
+            case 'focusPurchaseBarcode': this.gotoPage('purchase'); setTimeout(() => document.getElementById('pBarcodeScanner')?.focus(), 120); break;
+            case 'focusReturnBarcode': this.gotoPage('returns'); setTimeout(() => document.getElementById('retBarcodeScanner')?.focus(), 120); break;
+            case 'focusReportSearch': this.gotoPage('reports'); setTimeout(() => document.getElementById('rSearch')?.focus(), 120); break;
+            case 'focusColorName': this.gotoPage('settings'); setTimeout(() => document.getElementById('defColorName')?.focus(), 120); break;
+            default: this.quickNewDelivery();
+        }
+    },
+
+    quickWizardStep() {
+        if (this._currentPageId() !== 'entry') { this.quickNewDelivery(); return; }
+        const lastStep = this._wizSteps ? this._wizSteps().length - 1 : 6;
+        if ((this._wiz?.step || 0) >= lastStep) this._wizSave?.();
+        else this._wizNext?.();
     },
 
     quickNewDelivery() {
@@ -613,7 +788,7 @@ window.app = {
             this._checkSessionValid();
             this.updateEntryUserSelect(); // refresh entry user dropdown
             const active = document.querySelector('.page.active');
-            if (active?.id === 'page-users' && this.role === 'Admin') this.renderUsersPage();
+            if (active?.id === 'page-settings' && this.role === 'Admin') this.renderUsersPage();
         });
        if (this.role === 'Admin') {
     onValue(logsRef, snap => { this.logsData = snap.val() || {}; this.updateCurrentPage(); });
@@ -632,7 +807,7 @@ window.app = {
             onValue(ref(db, 'jawaher_audit'), snap => {
                 this.auditData = snap.val() || {};
                 const active = document.querySelector('.page.active');
-                if (active?.id === 'page-audit') this.renderAuditPage();
+                if (active?.id === 'page-logs') this.renderLogs();
             });
         }
 
@@ -658,12 +833,11 @@ window.app = {
         if (id === 'reports') { this.renderTable(); this.renderStageCards(); }
         if (id === 'warehouse') this.renderWarehouse();
         if (id === 'purchase') this.renderPurchasePage();
-    if (id === 'returns') this.renderReturnsList();
-    if (id === 'definitions') this.renderDefinitions();
-    if (id === 'logs') this.renderLogs();
-    if (id === 'transfer')    this.renderTransferPage();
-    if (id === 'movement') this.renderMovementTable();
-    if (id === 'customers' && this.role === 'Admin') this.renderCustomers();
+        if (id === 'returns') this.renderReturnsList();
+        if (id === 'settings') { this.renderDefinitions(); if (this.role === 'Admin') this.renderUsersPage(); }
+        if (id === 'logs') this.renderLogs();
+        if (id === 'movement') this.renderMovementTable();
+        if (id === 'customers' && this.role === 'Admin') this.renderCustomers();
     },
 
     // ============ DEFINITIONS ============
@@ -2713,9 +2887,9 @@ ${labelsHtml}
     },
 
   _renderItemCards(items) {
-        const grid = document.getElementById('warehouseGrid'); if (!grid) return;
-        
-        // 1. حالة المستودع فارغ (تم تصحيحها وحذف الزر غير المنطقي هنا)
+        const grid = document.getElementById('warehouseGrid');
+        if (!grid) return;
+
         if (items.length === 0) {
             grid.innerHTML = `<div class="col-12" style="text-align:center;padding:3rem;color:var(--ink-mid)">
                 <i class="fas fa-warehouse fa-3x" style="opacity:.2;display:block;margin-bottom:1rem"></i>المستودع فارغ
@@ -2724,25 +2898,65 @@ ${labelsHtml}
             return;
         }
 
-        // 2. رسم البطاقات
+        const renderVariant = (id, w, key, q) => {
+            let dispSize = key;
+            let dispColor = '';
+            if (key.includes(' - ')) {
+                dispSize = key.split(' - ')[0];
+                dispColor = key.split(' - ').slice(1).join(' - ');
+            }
+            const v = w.variations ? w.variations[key] : null;
+            const vCode = v?.barcode || w.barcode || id.slice(-8).toUpperCase();
+            const vColor = dispColor || v?.color || w.sizeColors?.[key] || w.color || '';
+            const colorHex = this._colorHex(vColor) || '#9CA3AF';
+            const qtyClass = q <= 0 ? 'is-zero' : (q <= 3 ? 'is-low' : '');
+            return `<div class="warehouse-variant-row ${qtyClass}">
+                <div class="warehouse-variant-meta">
+                    <span class="warehouse-variant-size">${this._escapeHtml(dispSize)}</span>
+                    ${vColor ? `<span class="warehouse-color-dot" style="background:${colorHex}"></span><span class="warehouse-variant-color">${this._escapeHtml(vColor)}</span>` : ''}
+                    <span class="warehouse-variant-qty"><strong>${this._safeNum(q, 0)}</strong> قطعة</span>
+                </div>
+                <div class="warehouse-variant-barcode">
+                    <button type="button" class="warehouse-mini-btn" onclick="app.inlineEditBarcode('${this._jsArg(id)}','${this._jsArg(key)}')" title="تعديل الباركود">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <button type="button" class="warehouse-barcode-chip" onclick="app.showBarcode('${this._jsArg(vCode)}','${this._jsArg(w.name)}','${this._jsArg(dispSize)}','${this._jsArg(vColor)}','${this._jsArg(w.pageName || '')}','${this._jsArg(id)}')" title="عرض / طباعة الباركود">
+                        <span>${this._escapeHtml(vCode)}</span>
+                        <i class="fas fa-barcode"></i>
+                    </button>
+                </div>
+            </div>`;
+        };
+
         grid.innerHTML = items.map(([id, w]) => {
             const sizes = Object.entries(w.sizes || {});
-            const total = sizes.reduce((s, [, q]) => s + q, 0);
+            const total = sizes.reduce((sum, [, q]) => sum + this._safeNum(q, 0), 0);
             const fillCls = total > 10 ? 'qty-high' : total > 3 ? 'qty-med' : 'qty-low';
             const mainColorHex = this._colorHex(w.color);
             const colorBorder = mainColorHex || 'var(--gold)';
-            
+            const safePanelId = `whv_${String(id).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+            const firstFive = sizes.slice(0, 5);
+            const rest = sizes.slice(5);
+            const variantsHtml = sizes.length === 0
+                ? `<div class="warehouse-variant-empty">لا توجد مقاسات</div>`
+                : `${firstFive.map(([key, q]) => renderVariant(id, w, key, q)).join('')}
+                   ${rest.length ? `<div class="warehouse-extra-variants" id="${safePanelId}_extra" hidden>${rest.map(([key, q]) => renderVariant(id, w, key, q)).join('')}</div>
+                   <button type="button" class="warehouse-variants-toggle" onclick="app.toggleWarehouseVariants('${safePanelId}', this)">
+                        <span class="toggle-open"><i class="fas fa-chevron-down"></i> عرض ${rest.length} مقاس/لون إضافي</span>
+                        <span class="toggle-close"><i class="fas fa-chevron-up"></i> إخفاء التفاصيل</span>
+                   </button>` : ''}`;
+
             return `<div class="col-12 col-sm-6 col-lg-4 col-xl-3">
                 <div class="item-card" style="border-top:4px solid ${colorBorder}">
                     <div class="item-card-header">
-                        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-                            <div>
-                                <div class="item-card-name">${w.name}</div>
-                                <div class="item-card-code" style="opacity:.7;font-size:.7rem">المعرف: ${id.slice(-8).toUpperCase()}</div>
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
+                            <div style="min-width:0">
+                                <div class="item-card-name">${this._escapeHtml(w.name)}</div>
+                                <div class="item-card-code" style="opacity:.85;font-size:.7rem">المعرف: ${this._escapeHtml(id.slice(-8).toUpperCase())}</div>
                             </div>
-                            ${total <= 3 ? `<span style="background:rgba(192,37,86,.25);color:#ffaaaa;font-size:.7rem;font-weight:800;padding:2px 8px;border-radius:20px">⚠ منخفض</span>` : ''}
+                            ${total <= 3 ? `<span class="stock-low-pill">⚠ منخفض</span>` : ''}
                         </div>
-                        ${w.pageName ? `<div style="font-size:.72rem;color:rgba(255,255,255,.5);margin-top:4px"><i class="fas fa-file-alt me-1"></i>${w.pageName}</div>` : ''}
+                        ${w.pageName ? `<div style="font-size:.72rem;color:rgba(255,255,255,.72);margin-top:4px"><i class="fas fa-file-alt me-1"></i>${this._escapeHtml(w.pageName)}</div>` : ''}
                     </div>
                     <div class="item-card-body">
                         <div class="item-qty-row">
@@ -2751,56 +2965,40 @@ ${labelsHtml}
                         </div>
                         <div class="item-qty-bar"><div class="item-qty-fill ${fillCls}" style="width:${Math.min(total > 0 ? Math.round(total / Math.max(total, 20) * 100) : 0, 100)}%"></div></div>
                         <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.5rem">
-                            <div style="background:rgba(26,107,74,.08);border:1px solid rgba(26,107,74,.25);border-radius:8px;padding:4px 10px;font-size:.74rem;display:flex;align-items:center;gap:5px">
-                                <span style="color:var(--emerald)">سعر البيع</span>
-                                <strong style="color:var(--emerald)">${w.sellPrice ? w.sellPrice + ' JOD' : '—'}</strong>
-                                <span style="cursor:pointer;color:var(--gold);font-size:.72rem;margin-right:2px" onclick="app.inlineEditSellPrice('${id}')" title="تعديل سعر البيع"><i class="fas fa-pencil-alt"></i></span>
+                            <div class="warehouse-price-chip">
+                                <span>سعر البيع</span>
+                                <strong>${w.sellPrice ? `${this._escapeHtml(w.sellPrice)} JOD` : '—'}</strong>
+                                <button type="button" onclick="app.inlineEditSellPrice('${this._jsArg(id)}')" title="تعديل سعر البيع"><i class="fas fa-pencil-alt"></i></button>
                             </div>
                         </div>
-                        <div style="background:rgba(201,168,76,.06);border-right:3px solid var(--gold);border-radius:0 8px 8px 0;padding:5px 10px;font-size:.76rem;color:var(--ink-mid);margin-bottom:.5rem;display:flex;align-items:center;gap:6px">
-                            <i class="fas fa-sticky-note" style="color:var(--gold)"></i>
-                            <span style="flex:1">${w.notes || '<span style="opacity:.45">لا توجد ملاحظة</span>'}</span>
-                            <span style="cursor:pointer;color:var(--gold);font-size:.72rem" onclick="app.inlineEditNotes('${id}')" title="تعديل الملاحظة"><i class="fas fa-pencil-alt"></i></span>
+                        <div class="warehouse-note-chip">
+                            <i class="fas fa-sticky-note"></i>
+                            <span>${w.notes ? this._escapeHtml(w.notes) : '<span style="opacity:.55">لا توجد ملاحظة</span>'}</span>
+                            <button type="button" onclick="app.inlineEditNotes('${this._jsArg(id)}')" title="تعديل الملاحظة"><i class="fas fa-pencil-alt"></i></button>
                         </div>
-                        <div class="item-sizes mb-3">
-                            ${sizes.length === 0 ? `<span style="color:var(--ink-mid);font-size:.8rem">لا توجد مقاسات</span>` : sizes.map(([key, q]) => {
-                                // فصل المقاس واللون من المفتاح "S - وردي" أو "S"
-                                let dispSize = key, dispColor = '';
-                                if (key.includes(' - ')) {
-                                    dispSize = key.split(' - ')[0];
-                                    dispColor = key.split(' - ').slice(1).join(' - ');
-                                }
-                                const v = w.variations ? w.variations[key] : null;
-                                const vCode = v && v.barcode ? v.barcode : (w.barcode || id.slice(-8)).toUpperCase();
-                                // أولوية اللون: من المفتاح المركب → variation → sizeColors → اللون العام
-                                const vColor = dispColor || (v && v.color) || (w.sizeColors && w.sizeColors[key]) || w.color || '';
-                                const colorHex = this._colorHex(vColor) || '#ccc';
-                                return `<div style="background:rgba(0,0,0,.02);border:1px solid var(--border);padding:6px;border-radius:8px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;width:100%">
-                                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                                        <span style="font-weight:700;font-size:.85rem">${dispSize}</span>
-                                        ${vColor ? `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${colorHex};border:1px solid rgba(0,0,0,.15);flex-shrink:0"></span><span style="font-size:.78rem;color:var(--ink-mid)">${vColor}</span>` : ''}
-                                        <span style="${q === 0 ? 'color:var(--ruby)' : 'color:var(--ink)'}">: <strong>${q}</strong> قطعة</span>
-                                    </div>
-                                    <div style="font-size:.7rem;font-family:monospace;background:var(--paper);padding:4px 6px;border-radius:4px;border:1px solid var(--border);display:flex;align-items:center;gap:5px">
-                                        <span style="cursor:pointer" onclick="app.showBarcode('${vCode}','${w.name}','${dispSize}','${vColor}','${w.pageName||''}','${id}')" title="طباعة الباركود">
-                                            <i class="fas fa-barcode" style="color:var(--gold)"></i> ${vCode}
-                                        </span>
-                                        <span style="cursor:pointer;color:var(--gold);opacity:.7;font-size:.65rem" onclick="app.inlineEditBarcode('${id}','${key}')" title="تعديل الباركود"><i class="fas fa-pencil-alt"></i></span>
-                                    </div>
-                                </div>`;
-                            }).join('')}
+                        <div class="item-sizes warehouse-variants" id="${safePanelId}">
+                            ${variantsHtml}
                         </div>
                         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
-                            <button class="btn-j btn-gold btn-xs-j" style="flex:1" onclick="app.openAddStockModal('${id}')"><i class="fas fa-plus"></i> إضافة كمية</button>
-                            <button class="btn-j btn-ghost btn-xs-j" onclick="app.renameWarehouseItem('${id}')" title="تغيير الاسم"><i class="fas fa-pencil-alt" style="color:var(--gold)"></i></button>
-                            <button class="btn-j btn-emerald btn-xs-j" style="flex:1" onclick="app.openInventoryCorrection('${id}')" title="تصحيح جرد"><i class="fas fa-clipboard-check"></i> جرد</button>
-                            <button class="btn-j btn-sapphire btn-xs-j" onclick="app.viewMovement('${id}')" title="حركة الصنف"><i class="fas fa-history"></i></button>
-                            <button class="btn-j btn-ruby btn-xs-j" onclick="app.deleteItem('${id}')" title="حذف"><i class="fas fa-trash"></i></button>
+                            <button class="btn-j btn-gold btn-xs-j" style="flex:1" onclick="app.openAddStockModal('${this._jsArg(id)}')"><i class="fas fa-plus"></i> إضافة كمية</button>
+                            <button class="btn-j btn-ghost btn-xs-j" onclick="app.renameWarehouseItem('${this._jsArg(id)}')" title="تغيير الاسم"><i class="fas fa-pencil-alt" style="color:var(--gold)"></i></button>
+                            <button class="btn-j btn-emerald btn-xs-j" style="flex:1" onclick="app.openInventoryCorrection('${this._jsArg(id)}')" title="تصحيح جرد"><i class="fas fa-clipboard-check"></i> جرد</button>
+                            <button class="btn-j btn-sapphire btn-xs-j" onclick="app.viewMovement('${this._jsArg(id)}')" title="حركة الصنف"><i class="fas fa-history"></i></button>
+                            <button class="btn-j btn-ruby btn-xs-j" onclick="app.deleteItem('${this._jsArg(id)}')" title="حذف"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>
                 </div>
             </div>`;
         }).join('');
+    },
+
+    toggleWarehouseVariants(containerId, button) {
+        const extra = document.getElementById(`${containerId}_extra`);
+        if (!extra) return;
+        const expanded = extra.hasAttribute('hidden');
+        if (expanded) extra.removeAttribute('hidden');
+        else extra.setAttribute('hidden', '');
+        button?.classList.toggle('is-expanded', expanded);
     },
 
     openAddStockModal(itemId) {
@@ -3501,21 +3699,111 @@ updateRetSizes(itemIdx) {
             </div>`).join('');
     },
 
-    // ============ LOGS ============
+    // ============ UNIFIED LOGS + AUDIT ============
     log(action, id, details) {
         if (this.role !== 'Admin') return;
         push(logsRef, { timestamp: Date.now(), date: new Date().toLocaleString('en-GB'), user: this.userName, action, id, details });
     },
+
+    _auditChangesHtml(changes) {
+        if (!Array.isArray(changes) || !changes.length) return '';
+        return `
+            <div class="log-change-box">
+                ${changes.map(c => `
+                    <div class="log-change-row">
+                        <span class="log-change-field">${this._escapeHtml(c.fieldLabel || c.field || '')}</span>
+                        <span class="log-change-before">${this._escapeHtml(this._auditVal(c.before))}</span>
+                        <i class="fas fa-long-arrow-alt-left"></i>
+                        <span class="log-change-after">${this._escapeHtml(this._auditVal(c.after))}</span>
+                    </div>`).join('')}
+            </div>`;
+    },
+
+    _buildUnifiedLogRows() {
+        const systemRows = Object.values(this.logsData || {}).map(l => ({
+            source: 'system',
+            sourceLabel: 'عمليات',
+            timestamp: Number(l.timestamp || 0),
+            user: l.user || '',
+            eventType: l.action || '',
+            entityId: l.id || '',
+            details: l.details || '',
+            changesHtml: ''
+        }));
+
+        const auditRows = Object.values(this.auditData || {}).map(e => ({
+            source: 'audit',
+            sourceLabel: 'تدقيق',
+            timestamp: Number(e.ts || 0),
+            user: e.user || '',
+            eventType: e.eventType || '',
+            entityId: e.entityId || '',
+            details: e.description || '',
+            changesHtml: this._auditChangesHtml(e.changes)
+        }));
+
+        return [...systemRows, ...auditRows].sort((a, b) => b.timestamp - a.timestamp);
+    },
+
+    _refreshUnifiedLogFilters(rows) {
+        const eventSelect = document.getElementById('logEventFilter');
+        const userSelect = document.getElementById('logUserFilter');
+        if (eventSelect) {
+            const cur = eventSelect.value;
+            const events = [...new Set(rows.map(r => r.eventType).filter(Boolean))].sort();
+            eventSelect.innerHTML = '<option value="">كل الحركات</option>' +
+                events.map(v => `<option value="${this._escapeHtml(v)}" ${cur === v ? 'selected' : ''}>${this._escapeHtml(v)}</option>`).join('');
+        }
+        if (userSelect) {
+            const cur = userSelect.value;
+            const users = [...new Set(rows.map(r => r.user).filter(Boolean))].sort();
+            userSelect.innerHTML = '<option value="">كل المستخدمين</option>' +
+                users.map(v => `<option value="${this._escapeHtml(v)}" ${cur === v ? 'selected' : ''}>${this._escapeHtml(v)}</option>`).join('');
+        }
+    },
+
     renderLogs() {
-        const el = document.getElementById('logsBody'); if (!el) return;
-        const entries = Object.values(this.logsData || {}).sort((a, b) => b.timestamp - a.timestamp);
-        el.innerHTML = entries.map(l => `<tr>
-            <td dir="ltr" style="font-size:.8rem">${new Date(l.timestamp).toLocaleString('en-GB')}</td>
-            <td style="font-weight:700">${l.user || ''}</td>
-            <td><span class="badge-j badge-new">${l.action || ''}</span></td>
-            <td style="font-size:.78rem;color:var(--gold)">${(l.id || '').slice(-8)}</td>
-            <td style="font-size:.85rem">${l.details || ''}</td>
-        </tr>`).join('');
+        if (this.role !== 'Admin') return;
+        const el = document.getElementById('logsBody');
+        if (!el) return;
+
+        const allRows = this._buildUnifiedLogRows();
+        this._refreshUnifiedLogFilters(allRows);
+
+        const q = (document.getElementById('logSearch')?.value || '').trim().toLowerCase();
+        const sourceFilter = document.getElementById('logSourceFilter')?.value || '';
+        const eventFilter = document.getElementById('logEventFilter')?.value || '';
+        const userFilter = document.getElementById('logUserFilter')?.value || '';
+
+        const rows = allRows.filter(r => {
+            const haystack = `${r.sourceLabel} ${r.user} ${r.eventType} ${r.entityId} ${r.details}`.toLowerCase();
+            if (q && !haystack.includes(q)) return false;
+            if (sourceFilter && r.source !== sourceFilter) return false;
+            if (eventFilter && r.eventType !== eventFilter) return false;
+            if (userFilter && r.user !== userFilter) return false;
+            return true;
+        });
+
+        if (!rows.length) {
+            el.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--ink-mid)">لا توجد سجلات مطابقة</td></tr>';
+            return;
+        }
+
+        el.innerHTML = rows.map(r => {
+            const badgeClass = r.source === 'audit' ? 'badge-postponed' : 'badge-new';
+            const refId = String(r.entityId || '');
+            return `<tr>
+                <td><span class="badge-j ${badgeClass}">${this._escapeHtml(r.sourceLabel)}</span></td>
+                <td dir="ltr" style="font-size:.78rem;white-space:nowrap">${r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB') : '—'}</td>
+                <td style="font-weight:800">${this._escapeHtml(r.user || '—')}</td>
+                <td><span class="badge-j badge-delivered">${this._escapeHtml(r.eventType || '—')}</span></td>
+                <td style="font-size:.78rem;color:var(--gold);font-family:monospace">${this._escapeHtml(refId ? refId.slice(-8) : '—')}</td>
+                <td style="font-size:.85rem;min-width:260px">
+                    ${this._escapeHtml(r.details || '—')}
+                    ${r.changesHtml || ''}
+                </td>
+            </tr>`;
+        }).join('');
     },
 
     // ============ HELPERS ============
@@ -4948,54 +5236,9 @@ updateRetSizes(itemIdx) {
         push(ref(db, 'jawaher_audit'), entry);
     },
 
-    // Render audit trail page
+    // Backward-compatible alias after merging audit into the unified log page
     renderAuditPage() {
-        if (this.role !== 'Admin') return;
-        const el = document.getElementById('auditBody'); if (!el) return;
-        const q   = document.getElementById('auditSearch')?.value.toLowerCase() || '';
-        const etF = document.getElementById('auditEventType')?.value || '';
-        const userF = document.getElementById('auditUserFilter')?.value || '';
-
-        const entries = Object.values(this.auditData || {})
-            .sort((a, b) => b.ts - a.ts)
-            .filter(e => {
-                if (q && !(e.description||'').toLowerCase().includes(q) && !(e.entityId||'').includes(q)) return false;
-                if (etF && e.eventType !== etF) return false;
-                if (userF && e.user !== userF) return false;
-                return true;
-            });
-
-        const eventColors = {
-            order_create: 'badge-done',
-            order_edit:   'badge-process',
-            order_delete: 'badge-canceled',
-            price_change: 'badge-postponed',
-            stock_change: 'badge-new',
-            user_action:  'badge-delivered',
-        };
-
-        el.innerHTML = entries.map(e => {
-            const changesHtml = e.changes?.length ? `
-                <div style="margin-top:.5rem;padding:.5rem .75rem;background:var(--paper-warm);border-radius:8px;border-right:3px solid var(--gold)">
-                    ${e.changes.map(c => `
-                        <div style="font-size:.75rem;display:flex;gap:.5rem;align-items:center;padding:.2rem 0;border-bottom:1px dashed var(--border)">
-                            <span style="font-weight:700;color:var(--ink-mid);min-width:90px">${c.fieldLabel}</span>
-                            <span style="color:var(--ruby-light);text-decoration:line-through;font-family:monospace">${this._auditVal(c.before)}</span>
-                            <i class="fas fa-long-arrow-alt-left" style="color:var(--gold);font-size:.6rem"></i>
-                            <span style="color:var(--emerald);font-weight:700;font-family:monospace">${this._auditVal(c.after)}</span>
-                        </div>`).join('')}
-                </div>` : '';
-            return `<tr>
-                <td style="font-size:.72rem;color:var(--ink-mid)" dir="ltr">${new Date(e.ts).toLocaleString('en-GB')}</td>
-                <td style="font-weight:700;font-size:.85rem">${e.user || ''}</td>
-                <td><span class="badge-j ${eventColors[e.eventType]||'badge-new'}" style="font-size:.7rem">${e.eventType||''}</span></td>
-                <td style="font-size:.78rem;color:var(--gold);font-family:monospace">${(e.entityId||'').slice(-8)}</td>
-                <td style="font-size:.82rem">
-                    ${e.description || ''}
-                    ${changesHtml}
-                </td>
-            </tr>`;
-        }).join('') || '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--ink-mid)">لا توجد سجلات</td></tr>';
+        this.renderLogs();
     },
 
     _auditVal(v) {

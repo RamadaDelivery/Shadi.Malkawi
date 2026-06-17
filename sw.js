@@ -3,14 +3,13 @@
 // Network-First | Auto-Update on every deploy
 // ============================================================
 
-const CACHE_NAME = 'shm-cache-v6';
+const CACHE_NAME = 'shm-cache-v8';
 
 const SHELL = [
     './',
     './index.html',
     './app.js',
     './style.css',
-    './style-shm.css',
     './constants.js',
     './firebase-config.js',
     './SHM.png',

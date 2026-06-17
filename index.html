@@ -24,7 +24,6 @@
 
     <!-- ── App Styles ─────────────────────────────────────── -->
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="style-shm.css">
 </head>
 
 <body>
@@ -169,12 +168,9 @@
             <button class="nav-btn admin-only" data-page="warehouse"   onclick="app.gotoPage('warehouse')"  ><i class="fas fa-warehouse"></i>    المستودع</button>
             <button class="nav-btn admin-only" data-page="purchase"    onclick="app.gotoPage('purchase')"   ><i class="fas fa-shopping-cart"></i> المشتريات</button>
             <button class="nav-btn admin-only" data-page="returns"     onclick="app.gotoPage('returns')"    ><i class="fas fa-undo-alt"></i>     المرتجعات</button>
-            <button class="nav-btn admin-only" data-page="transfer"    onclick="app.gotoPage('transfer')"   ><i class="fas fa-exchange-alt"></i>  مستودع المؤسسة</button>
-            <button class="nav-btn admin-only" data-page="definitions" onclick="app.gotoPage('definitions')"><i class="fas fa-cog"></i>          التعريفات</button>
-            <button class="nav-btn admin-only" data-page="logs"        onclick="app.gotoPage('logs')"       ><i class="fas fa-history"></i>      السجل</button>
             <button class="nav-btn admin-only" data-page="customers"  onclick="app.gotoPage('customers')"  ><i class="fas fa-users"></i>        العملاء</button>
-            <button class="nav-btn admin-only" data-page="users"      onclick="app.gotoPage('users')"      ><i class="fas fa-user-shield"></i>  المستخدمون</button>
-            <button class="nav-btn admin-only" data-page="audit"     onclick="app.gotoPage('audit')"      ><i class="fas fa-file-contract"></i> سجل التدقيق</button>
+            <button class="nav-btn admin-only" data-page="settings"  onclick="app.gotoPage('settings')"  ><i class="fas fa-sliders-h"></i>     إعدادات الموقع</button>
+            <button class="nav-btn admin-only" data-page="logs"      onclick="app.gotoPage('logs')"      ><i class="fas fa-file-contract"></i> السجل والتدقيق</button>
         </div>
 
         <!-- ── Main Content ─────────────────────────────────── -->
@@ -725,71 +721,37 @@
                 </div>
             </div>
 
-            <!-- ════ INSTITUTION TRANSFER ════ -->
-            <div id="page-transfer" class="page">
-                <div class="page-header">
-                    <h1 class="page-title">مستودع المؤسسة</h1>
-                    <p class="page-subtitle">استلام أو تسليم بضاعة من/إلى مستودع المؤسسة</p>
-                </div>
-                <div class="row g-4">
-                    <div class="col-lg-7">
-                        <div class="card-j p-4">
-                            <div style="font-weight:800;margin-bottom:1.25rem;font-size:1.1rem">
-                                <i class="fas fa-exchange-alt" style="color:var(--gold)"></i> تسجيل حركة جديدة
-                            </div>
-                            <!-- نوع الحركة -->
-                            <div style="display:flex;gap:1rem;margin-bottom:1.5rem">
-                                <label style="flex:1;display:flex;align-items:center;gap:.6rem;padding:.85rem 1rem;border-radius:12px;cursor:pointer;border:2px solid var(--emerald);background:rgba(26,107,74,.06);font-weight:800;font-size:.95rem">
-                                    <input type="radio" name="trType" value="in" style="accent-color:var(--emerald);width:18px;height:18px" checked>
-                                    <i class="fas fa-arrow-circle-down" style="color:var(--emerald);font-size:1.2rem"></i>
-                                    <span style="color:var(--emerald)">استلام من المؤسسة</span>
-                                </label>
-                                <label style="flex:1;display:flex;align-items:center;gap:.6rem;padding:.85rem 1rem;border-radius:12px;cursor:pointer;border:2px solid var(--ruby-light);background:rgba(192,37,86,.06);font-weight:800;font-size:.95rem">
-                                    <input type="radio" name="trType" value="out" style="accent-color:var(--ruby-light);width:18px;height:18px">
-                                    <i class="fas fa-arrow-circle-up" style="color:var(--ruby-light);font-size:1.2rem"></i>
-                                    <span style="color:var(--ruby-light)">تسليم للمؤسسة</span>
-                                </label>
-                            </div>
-
-                            <!-- قائمة الأصناف -->
-                            <div id="trItemsList" style="margin-bottom:1rem"></div>
-                            <button class="add-item-row-btn" onclick="app._trAddRow()">
-                                <i class="fas fa-plus-circle" style="color:var(--gold)"></i> إضافة صنف آخر
-                            </button>
-
-                            <!-- الحقول الإضافية -->
-                            <div class="row g-3 mt-2">
-                                <div class="col-md-6">
-                                    <label class="form-label-j">تاريخ الحركة</label>
-                                    <input type="text" id="trDate" class="form-control-j" placeholder="dd/mm/yyyy">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label-j">ملاحظات</label>
-                                    <input type="text" id="trNotes" class="form-control-j" placeholder="أي ملاحظات إضافية...">
-                                </div>
-                            </div>
-                            <button class="btn-j btn-gold w-100 mt-4" onclick="app.saveTransfer()" style="font-size:1rem;padding:.85rem">
-                                <i class="fas fa-save"></i> تأكيد وحفظ الحركة
-                            </button>
-                        </div>
+            <!-- ════ SITE SETTINGS ════ -->
+            <div id="page-settings" class="page">
+                <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <h1 class="page-title">إعدادات الموقع</h1>
+                        <p class="page-subtitle">التعريفات العامة، الألوان، المستخدمون، والصلاحيات</p>
                     </div>
-                    <div class="col-lg-5">
-                        <div class="card-j p-4 h-100">
-                            <div style="font-weight:800;margin-bottom:1.25rem;font-size:1rem">
-                                <i class="fas fa-history" style="color:var(--gold)"></i> سجل الحركات
-                            </div>
-                            <div id="transferHistory" style="max-height:560px;overflow-y:auto"></div>
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
+                        <div class="search-bar" style="width:200px">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="usrSearch" placeholder="بحث بالاسم أو ID..." oninput="app.renderUsersPage()">
                         </div>
+                        <div class="select-wrapper" style="width:150px">
+                            <select id="usrRoleFilter" class="form-control-j select-j" onchange="app.renderUsersPage()">
+                                <option value="">كل الأدوار</option>
+                                <option value="Admin">مدير</option>
+                                <option value="User">مستخدم</option>
+                                <option value="Delivery">توصيل</option>
+                            </select>
+                        </div>
+                        <button class="btn-j btn-gold btn-sm-j" onclick="app.openCreateUserModal()">
+                            <i class="fas fa-user-plus"></i> مستخدم جديد
+                        </button>
                     </div>
                 </div>
-            </div>
-            <!-- ════ END INSTITUTION TRANSFER ════ -->
 
-            <!-- ════ DEFINITIONS ════ -->
-            <div id="page-definitions" class="page">
-                <div class="page-header">
-                    <h1 class="page-title">التعريفات</h1>
-                    <p class="page-subtitle">إدارة الصفحات والمدخلين والألوان</p>
+                <div class="settings-section-head">
+                    <div>
+                        <h2><i class="fas fa-cog"></i> التعريفات العامة</h2>
+                        <p>إدارة الصفحات، مصادر الطلبات، والألوان المخصصة.</p>
+                    </div>
                 </div>
                 <div class="row g-4">
                     <div class="col-md-6">
@@ -855,26 +817,87 @@
                         </div>
                     </div>
                 </div>
-            </div>
 
-       <!-- ════ LOGS ════ -->
+                <div class="settings-section-head settings-section-head--spaced">
+                    <div>
+                        <h2><i class="fas fa-user-shield"></i> المستخدمون والصلاحيات</h2>
+                        <p>إدارة حسابات الدخول، الأدوار، والصلاحيات التشغيلية.</p>
+                    </div>
+                </div>
+                <!-- Security Banner -->
+                <div style="background:linear-gradient(135deg,rgba(26,58,107,.08),rgba(26,58,107,.04));border:1px solid rgba(26,58,107,.2);border-radius:14px;padding:.85rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:.85rem">
+                    <div style="width:38px;height:38px;border-radius:10px;background:rgba(26,58,107,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                        <i class="fas fa-shield-alt" style="color:#1A3A6B;font-size:1.1rem"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:800;font-size:.88rem;color:#1A3A6B">نظام الصلاحيات المتدرج — RBAC</div>
+                        <div style="font-size:.75rem;color:var(--ink-mid)">المستخدمون المدمجون (admin, basel, user, delivery) محميون ولا يمكن تعديلهم من هنا. كلمات المرور محمية بتشفير SHA-256. التغييرات تُطبَّق فورياً على الجلسات النشطة.</div>
+                    </div>
+                </div>
+
+                <!-- Dynamic content rendered by renderUsersPage() -->
+                <div id="usrPageContent">
+                    <div style="text-align:center;padding:3rem;color:var(--ink-mid)">
+                        <i class="fas fa-spinner fa-spin" style="font-size:2rem;color:var(--gold)"></i>
+                    </div>
+                </div>
+            </div>
+            <!-- ════ END SITE SETTINGS ════ -->
+
+       <!-- ════ UNIFIED LOGS & AUDIT ════ -->
             <div id="page-logs" class="page">
-                <div class="page-header">
-                    <h1 class="page-title">سجل العمليات</h1>
-                    <p class="page-subtitle">تتبع جميع التغييرات في النظام</p>
+                <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <h1 class="page-title">السجل والتدقيق</h1>
+                        <p class="page-subtitle">سجل موحّد لكل العمليات التشغيلية وحركات التدقيق المالي</p>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
+                        <div class="search-bar" style="width:220px">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="logSearch" placeholder="بحث في السجل..." oninput="app.renderLogs()">
+                        </div>
+                        <div class="select-wrapper" style="width:160px">
+                            <select id="logSourceFilter" class="form-control-j select-j" onchange="app.renderLogs()">
+                                <option value="">كل السجلات</option>
+                                <option value="system">سجل العمليات</option>
+                                <option value="audit">سجل التدقيق</option>
+                            </select>
+                        </div>
+                        <div class="select-wrapper" style="width:170px">
+                            <select id="logEventFilter" class="form-control-j select-j" onchange="app.renderLogs()">
+                                <option value="">كل الحركات</option>
+                            </select>
+                        </div>
+                        <div class="select-wrapper" style="width:150px">
+                            <select id="logUserFilter" class="form-control-j select-j" onchange="app.renderLogs()">
+                                <option value="">كل المستخدمين</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
-                <div class="table-wrap" style="max-height:600px;overflow-y:auto;">
-                    <table class="table-j">
-                        <thead>
-                            <tr>
-                                <th>التاريخ والوقت</th><th>المستخدم</th><th>العملية</th>
-                                <th>المعرف</th><th>التفاصيل</th>
-                            </tr>
-                        </thead>
-                        <tbody id="logsBody"></tbody>
-                    </table>
+                <div class="card-j" style="overflow:hidden">
+                    <div class="table-wrap" style="max-height:650px;overflow-y:auto;">
+                        <table class="table-j">
+                            <thead>
+                                <tr>
+                                    <th>المصدر</th>
+                                    <th>التاريخ والوقت</th>
+                                    <th>المستخدم</th>
+                                    <th>الحركة</th>
+                                    <th>المرجع</th>
+                                    <th>التفاصيل والتغييرات</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logsBody">
+                                <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--ink-mid)">
+                                    <i class="fas fa-spinner fa-spin" style="font-size:1.5rem;color:var(--gold)"></i>
+                                </td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div> <!-- نهاية صفحة السجل -->
+            </div>
+            <!-- ════ END UNIFIED LOGS & AUDIT ════ -->
 
             <!-- ════ ITEM MOVEMENT ════ -->
             <div id="page-movement" class="page">
@@ -1037,107 +1060,13 @@
             </div>
             <!-- ════ END CUSTOMERS CRM ════ -->
 
-            <!-- ════ USERS & PERMISSIONS MANAGEMENT ════ -->
-            <div id="page-users" class="page">
-                <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-3">
-                    <div>
-                        <h1 class="page-title">إدارة المستخدمين والصلاحيات</h1>
-                        <p class="page-subtitle">نظام التحكم المركزي بالوصول — RBAC Enterprise</p>
-                    </div>
-                    <div class="d-flex gap-2 flex-wrap align-items-center">
-                        <div class="search-bar" style="width:200px">
-                            <i class="fas fa-search"></i>
-                            <input type="text" id="usrSearch" placeholder="بحث بالاسم أو ID..." oninput="app.renderUsersPage()">
-                        </div>
-                        <div class="select-wrapper" style="width:150px">
-                            <select id="usrRoleFilter" class="form-control-j select-j" onchange="app.renderUsersPage()">
-                                <option value="">كل الأدوار</option>
-                                <option value="Admin">مدير</option>
-                                <option value="User">مستخدم</option>
-                                <option value="Delivery">توصيل</option>
-                            </select>
-                        </div>
-                        <button class="btn-j btn-gold btn-sm-j" onclick="app.openCreateUserModal()">
-                            <i class="fas fa-user-plus"></i> مستخدم جديد
-                        </button>
-                    </div>
-                </div>
+                    </div><!-- نهاية الـ main-content بشكل صحيح -->
 
-                <!-- Security Banner -->
-                <div style="background:linear-gradient(135deg,rgba(26,58,107,.08),rgba(26,58,107,.04));border:1px solid rgba(26,58,107,.2);border-radius:14px;padding:.85rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:.85rem">
-                    <div style="width:38px;height:38px;border-radius:10px;background:rgba(26,58,107,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                        <i class="fas fa-shield-alt" style="color:#1A3A6B;font-size:1.1rem"></i>
-                    </div>
-                    <div>
-                        <div style="font-weight:800;font-size:.88rem;color:#1A3A6B">نظام الصلاحيات المتدرج — RBAC</div>
-                        <div style="font-size:.75rem;color:var(--ink-mid)">المستخدمون المدمجون (admin, basel, user, delivery) محميون ولا يمكن تعديلهم من هنا. كلمات المرور محمية بتشفير SHA-256. التغييرات تُطبَّق فورياً على الجلسات النشطة.</div>
-                    </div>
-                </div>
-
-                <!-- Dynamic content rendered by renderUsersPage() -->
-                <div id="usrPageContent">
-                    <div style="text-align:center;padding:3rem;color:var(--ink-mid)">
-                        <i class="fas fa-spinner fa-spin" style="font-size:2rem;color:var(--gold)"></i>
-                    </div>
-                </div>
-            </div>
-            <!-- ════ END USERS MANAGEMENT ════ -->
-
-            <!-- ════ AUDIT TRAIL ════ -->
-            <div id="page-audit" class="page">
-                <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-3">
-                    <div>
-                        <h1 class="page-title">سجل التدقيق المالي</h1>
-                        <p class="page-subtitle">تتبع كل تغيير في الأسعار والمخزون والبيانات — Audit Trail</p>
-                    </div>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <div class="search-bar" style="width:200px">
-                            <i class="fas fa-search"></i>
-                            <input type="text" id="auditSearch" placeholder="بحث..." oninput="app.renderAuditPage()">
-                        </div>
-                        <div class="select-wrapper" style="width:160px">
-                            <select id="auditEventType" class="form-control-j select-j" onchange="app.renderAuditPage()">
-                                <option value="">كل الأحداث</option>
-                                <option value="order_create">إنشاء طلب</option>
-                                <option value="order_edit">تعديل طلب</option>
-                                <option value="order_delete">حذف طلب</option>
-                                <option value="price_change">تغيير سعر</option>
-                                <option value="stock_change">تغيير مخزون</option>
-                            </select>
-                        </div>
-                        <div class="select-wrapper" style="width:140px">
-                            <select id="auditUserFilter" class="form-control-j select-j" onchange="app.renderAuditPage()">
-                                <option value="">كل المستخدمين</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                <div class="card-j" style="overflow:hidden">
-                    <div class="table-wrap" style="max-height:620px;overflow-y:auto">
-                        <table class="table-j">
-                            <thead><tr>
-                                <th>التاريخ والوقت</th>
-                                <th>المستخدم</th>
-                                <th>نوع الحدث</th>
-                                <th>المرجع</th>
-                                <th>التفاصيل والتغييرات</th>
-                            </tr></thead>
-                            <tbody id="auditBody">
-                                <tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--ink-mid)">
-                                    <i class="fas fa-spinner fa-spin" style="font-size:1.5rem;color:var(--gold)"></i>
-                                </td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            <!-- ════ END AUDIT TRAIL ════ -->
-        </div><!-- نهاية الـ main-content بشكل صحيح -->
-
-        <!-- ── Floating Quick Actions ─────────────────────────── -->
-        <button class="delivery-fab" id="deliveryFab" type="button" onclick="app.quickNewDelivery()" aria-label="إضافة طلب توصيل جديد" title="إضافة طلب توصيل جديد">
-            <span class="delivery-fab__icon"><i class="fas fa-plus"></i></span>
-            <span class="delivery-fab__label">طلب جديد</span>
+        <!-- ── Floating Contextual Quick Actions ───────────────── -->
+        <div class="quick-fab-menu" id="quickFabMenu" aria-label="إجراءات سريعة مرتبطة بالصفحة الحالية"></div>
+        <button class="delivery-fab" id="deliveryFab" type="button" onclick="app.handleFabMain()" aria-label="إجراءات سريعة" title="إجراءات سريعة">
+            <span class="delivery-fab__icon"><i class="fas fa-bolt"></i></span>
+            <span class="delivery-fab__label">إجراء سريع</span>
         </button>
         <button class="nav-reveal-pill" id="navRevealPill" type="button" onclick="app.revealNavigation()" aria-label="إظهار شريط التنقل">
             <i class="fas fa-compass"></i>
@@ -1153,12 +1082,9 @@
             <button class="nav-btn admin-only" data-page="warehouse"   onclick="app.gotoPage('warehouse')"  ><i class="fas fa-warehouse"></i>    <span>المستودع</span></button>
             <button class="nav-btn admin-only" data-page="purchase"    onclick="app.gotoPage('purchase')"   ><i class="fas fa-shopping-cart"></i><span>مشتريات</span></button>
             <button class="nav-btn admin-only" data-page="returns"     onclick="app.gotoPage('returns')"    ><i class="fas fa-undo-alt"></i>     <span>مرتجع</span></button>
-            <button class="nav-btn admin-only" data-page="definitions" onclick="app.gotoPage('definitions')"><i class="fas fa-cog"></i>          <span>تعريفات</span></button>
-            <button class="nav-btn admin-only" data-page="customers" onclick="app.gotoPage('customers')"><i class="fas fa-users"></i>        <span>عملاء</span></button>
-            <button class="nav-btn admin-only" data-page="users" onclick="app.gotoPage('users')"><i class="fas fa-user-shield"></i>  <span>مستخدمون</span></button>
-            <button class="nav-btn admin-only" data-page="transfer" onclick="app.gotoPage('transfer')"><i class="fas fa-exchange-alt"></i><span>تحويل</span></button>
-            <button class="nav-btn admin-only" data-page="logs" onclick="app.gotoPage('logs')"><i class="fas fa-history"></i><span>السجل</span></button>
-            <button class="nav-btn admin-only" data-page="audit" onclick="app.gotoPage('audit')"><i class="fas fa-file-contract"></i><span>تدقيق</span></button>
+            <button class="nav-btn admin-only" data-page="customers"   onclick="app.gotoPage('customers')"  ><i class="fas fa-users"></i>        <span>عملاء</span></button>
+            <button class="nav-btn admin-only" data-page="settings"    onclick="app.gotoPage('settings')"   ><i class="fas fa-sliders-h"></i>    <span>إعدادات</span></button>
+            <button class="nav-btn admin-only" data-page="logs"        onclick="app.gotoPage('logs')"       ><i class="fas fa-file-contract"></i><span>السجل</span></button>
         </div>
 
     </div><!-- /appContainer -->
