@@ -383,7 +383,7 @@
       💾 حفظ التعديلات (<span id="saveBtnCount">0</span>)
     </button>
     <button class="btn btn-magic" onclick="generateUniqueBarcodesForConflicts()">
-      ⚙️ توليد باركودات عشوائية للتعارضات
+      ⚙️ توليد باركودات رقمية للتعارضات
     </button>
     <button class="btn btn-outline" onclick="resetAll()">↩ إلغاء كل التعديلات</button>
     <button class="btn btn-outline" onclick="loadData()">🔄 تحديث من Firebase</button>
@@ -519,6 +519,29 @@ window.buildRows = () => {
   sizeSel.value  = prevS;
 };
 
+// ── Barcode helpers ──────────────────────────────────────────
+window.normalizeSixBarcode = (value, allowEmpty = true) => {
+  const raw = String(value || '').trim();
+  if (!raw) return allowEmpty ? '' : null;
+  if (!/^\d{1,6}$/.test(raw)) return null;
+  return raw.padStart(6, '0');
+};
+
+window.barcodeCompareKey = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const normalized = window.normalizeSixBarcode(raw, true);
+  return normalized === null ? raw : normalized;
+};
+
+window.nextSequentialBarcode = (reserved) => {
+  for (let n = 1; n <= 999999; n++) {
+    const code = String(n).padStart(6, '0');
+    if (!reserved.has(code)) return code;
+  }
+  throw new Error('لا توجد باركودات رقمية متاحة ضمن نطاق 000001-999999');
+};
+
 // ── Render table ─────────────────────────────────────────────
 window.renderTable = () => {
   const q      = document.getElementById('searchInp').value.trim().toLowerCase();
@@ -526,10 +549,10 @@ window.renderTable = () => {
   const fSize  = document.getElementById('filterSize').value;
   const fStatus= document.getElementById('filterStatus').value;
 
-  // Collect all new barcodes for conflict detection (non-empty)
+  // Collect all new barcodes for conflict detection (non-empty), normalizing numeric inputs to six digits
   const bcCount = {};
   for (const r of window._rows) {
-    const b = r.newBarcode.trim();
+    const b = window.barcodeCompareKey(r.newBarcode);
     if (b) bcCount[b] = (bcCount[b] || 0) + 1;
   }
 
@@ -540,32 +563,38 @@ window.renderTable = () => {
     if (fColor && r.color !== fColor) continue;
     if (fSize  && r.size  !== fSize)  continue;
 
-    const changed  = r.newBarcode.trim() !== r.oldBarcode.trim();
-    const conflict = r.newBarcode.trim() && bcCount[r.newBarcode.trim()] > 1;
-    const empty    = !r.newBarcode.trim();
+    const currentKey = window.barcodeCompareKey(r.newBarcode);
+    const oldKey     = window.barcodeCompareKey(r.oldBarcode);
+    const changed    = currentKey !== oldKey;
+    const invalid    = changed && currentKey && window.normalizeSixBarcode(r.newBarcode, false) === null;
+    const conflict   = currentKey && bcCount[currentKey] > 1;
+    const empty      = !currentKey;
 
     if (fStatus === 'changed'  && !changed)  continue;
     if (fStatus === 'conflict' && !conflict) continue;
     if (fStatus === 'empty'    && !empty)    continue;
 
-    filtered.push({ i, r, changed, conflict });
+    filtered.push({ i, r, changed, conflict, invalid });
   }
 
   window._filteredIndices = filtered.map(f => f.i);
 
   // Count totals
-  let totalChanged = 0, totalConflicts = 0;
+  let totalChanged = 0, totalConflicts = 0, totalInvalid = 0;
   for (const r of window._rows) {
-    const b = r.newBarcode.trim();
-    if (b !== r.oldBarcode.trim()) totalChanged++;
+    const b = window.barcodeCompareKey(r.newBarcode);
+    const oldB = window.barcodeCompareKey(r.oldBarcode);
+    const changed = b !== oldB;
+    if (changed) totalChanged++;
     if (b && bcCount[b] > 1) totalConflicts++;
+    if (changed && b && window.normalizeSixBarcode(r.newBarcode, false) === null) totalInvalid++;
   }
   document.getElementById('statChanged').textContent  = totalChanged;
   document.getElementById('statConflicts').textContent = totalConflicts;
   document.getElementById('saveBtnCount').textContent  = totalChanged;
 
   const saveBtn = document.getElementById('saveBtn');
-  saveBtn.disabled = totalChanged === 0 || totalConflicts > 0;
+  saveBtn.disabled = totalChanged === 0 || totalConflicts > 0 || totalInvalid > 0;
 
   const conflictInfo = document.getElementById('conflictInfo');
   conflictInfo.className = totalConflicts > 0 ? 'conflict-info show' : 'conflict-info';
@@ -576,7 +605,7 @@ window.renderTable = () => {
     return;
   }
 
-  const rows = filtered.map(({ i, r, changed, conflict }) => {
+  const rows = filtered.map(({ i, r, changed, conflict, invalid }) => {
     const swatchStyle = r.hex
       ? (r.hex.startsWith('linear') ? r.hex : `background:${r.hex}`)
       : 'background:#555';
@@ -584,13 +613,15 @@ window.renderTable = () => {
       ? `<span class="swatch" style="${r.hex?.startsWith('linear') ? 'background:' + r.hex : 'background:' + (r.hex||'#555')}"></span>`
       : '';
 
-    const statusBadge = conflict
-      ? '<span class="badge badge-conflict">⚠ تعارض</span>'
-      : changed
-        ? '<span class="badge badge-changed">✏ معدّل</span>'
-        : '';
+    const statusBadge = invalid
+      ? '<span class="badge badge-conflict">⚠ غير صالح</span>'
+      : conflict
+        ? '<span class="badge badge-conflict">⚠ تعارض</span>'
+        : changed
+          ? '<span class="badge badge-changed">✏ معدّل</span>'
+          : '';
 
-    const inputClass = conflict ? 'bc-input conflict' : changed ? 'bc-input changed' : 'bc-input';
+    const inputClass = invalid ? 'bc-input conflict' : conflict ? 'bc-input conflict' : changed ? 'bc-input changed' : 'bc-input';
 
     return `<tr data-row="${i}">
       <td style="color:var(--ink-mid);font-size:.75rem">${i+1}</td>
@@ -606,7 +637,11 @@ window.renderTable = () => {
                type="text"
                value="${escHtml(r.newBarcode)}"
                dir="ltr"
-               placeholder="أدخل الباركود"
+               inputmode="numeric"
+               maxlength="6"
+               pattern="\\d{0,6}"
+               placeholder="000001"
+               title="باركود رقمي من 6 خانات فقط"
                data-row="${i}"
                oninput="onBcInput(${i}, this.value)"
                onkeydown="onBcKeydown(event,${i})">
@@ -622,7 +657,7 @@ window.filterTable = window.renderTable;
 
 // ── Input handler ────────────────────────────────────────────
 window.onBcInput = (i, val) => {
-  window._rows[i].newBarcode = val;
+  window._rows[i].newBarcode = String(val || '').replace(/\D/g, '').slice(0, 6);
   renderTable();
   // Refocus the input that was being edited
   const inp = document.querySelector(`input[data-row="${i}"]`);
@@ -649,34 +684,28 @@ window.onBcKeydown = (e, i) => {
 
 // ── Generate Unique Barcodes for Conflicts ─────────────────────
 window.generateUniqueBarcodesForConflicts = () => {
-  // Build an active set of all current barcodes to guarantee absolute uniqueness
+  // Build an active set of all normalized six-digit barcodes to guarantee uniqueness
   const activeBarcodes = new Set();
-  for (const r of window._rows) {
-    const b = r.newBarcode.trim();
-    if (b) activeBarcodes.add(b);
-  }
-
-  // Count occurrences to identify conflicts
   const bcCount = {};
+
   for (const r of window._rows) {
-    const b = r.newBarcode.trim();
-    if (b) bcCount[b] = (bcCount[b] || 0) + 1;
+    const key = window.barcodeCompareKey(r.newBarcode);
+    if (key) bcCount[key] = (bcCount[key] || 0) + 1;
+    const normalized = window.normalizeSixBarcode(r.newBarcode, true);
+    if (normalized) activeBarcodes.add(normalized);
   }
 
   let generatedCount = 0;
 
-  // Helper function to generate an 8-digit random barcode
-  const produceRandomBC = () => Math.floor(10000000 + Math.random() * 90000000).toString();
-
   for (const r of window._rows) {
-    const currentBc = r.newBarcode.trim();
-    
-    // Condition: barcode is empty OR it is duplicated (has conflict)
-    if (!currentBc || bcCount[currentBc] > 1) {
-      let uniqueBc = produceRandomBC();
-      while (activeBarcodes.has(uniqueBc)) {
-        uniqueBc = produceRandomBC();
-      }
+    const currentKey = window.barcodeCompareKey(r.newBarcode);
+    const normalized = window.normalizeSixBarcode(r.newBarcode, true);
+    const invalid = currentKey && normalized === null;
+
+    // Condition: barcode is empty, invalid, or duplicated
+    if (!currentKey || invalid || bcCount[currentKey] > 1) {
+      if (normalized) activeBarcodes.delete(normalized);
+      const uniqueBc = window.nextSequentialBarcode(activeBarcodes);
       r.newBarcode = uniqueBc;
       activeBarcodes.add(uniqueBc);
       generatedCount++;
@@ -685,7 +714,7 @@ window.generateUniqueBarcodesForConflicts = () => {
 
   if (generatedCount > 0) {
     renderTable();
-    toast(`✅ تم توليد ${generatedCount} باركود فريد بنجاح لحل التعارضات!`, 'success');
+    toast(`✅ تم توليد ${generatedCount} باركود رقمي متسلسل لحل التعارضات`, 'success');
   } else {
     toast('لا توجد تعارضات أو خانات فارغة لتوليد باركودات لها.', 'info');
   }
@@ -693,16 +722,28 @@ window.generateUniqueBarcodesForConflicts = () => {
 
 // ── Save all ─────────────────────────────────────────────────
 window.saveAll = async () => {
-  const toSave = window._rows.filter(r => r.newBarcode.trim() !== r.oldBarcode.trim());
+  const toSave = window._rows.filter(r => window.barcodeCompareKey(r.newBarcode) !== window.barcodeCompareKey(r.oldBarcode));
   if (toSave.length === 0) { toast('لا توجد تعديلات للحفظ', 'info'); return; }
 
-  // Check conflicts
+  for (const r of toSave) {
+    const clean = window.normalizeSixBarcode(r.newBarcode, false);
+    if (!clean) {
+      toast('❌ لا يمكن حفظ باركود فارغ أو غير رقمي. استخدم 6 أرقام فقط مثل 000001', 'error');
+      return;
+    }
+    r.newBarcode = clean;
+  }
+
+  // Check conflicts after normalization
   const bcCount = {};
   for (const r of window._rows) {
-    const b = r.newBarcode.trim();
+    const b = window.barcodeCompareKey(r.newBarcode);
     if (b) bcCount[b] = (bcCount[b] || 0) + 1;
   }
-  const conflicts = toSave.filter(r => r.newBarcode.trim() && bcCount[r.newBarcode.trim()] > 1);
+  const conflicts = toSave.filter(r => {
+    const b = window.barcodeCompareKey(r.newBarcode);
+    return b && bcCount[b] > 1;
+  });
   if (conflicts.length > 0) {
     toast('❌ يوجد باركودات مكررة — يُرجى تصحيحها أولاً', 'error');
     return;
@@ -721,9 +762,9 @@ window.saveAll = async () => {
   for (const r of toSave) {
     try {
       const upd = {};
-      upd[r.path] = r.newBarcode.trim() || null;
+      upd[r.path] = r.newBarcode || null;
       await update(ref(db, '/'), upd);
-      r.oldBarcode = r.newBarcode.trim(); // mark as saved
+      r.oldBarcode = r.newBarcode; // mark as saved
       saved++;
     } catch (e) {
       errors.push(r.itemName);

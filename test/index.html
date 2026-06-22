@@ -564,7 +564,7 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label-j">باركود المنتج</label>
-                        <input type="text" id="pBarcode" class="form-control-j" placeholder="JW12345 أو اتركه فارغاً" dir="ltr" style="font-family:monospace;letter-spacing:1px">
+                        <input type="text" id="pBarcode" class="form-control-j" placeholder="000001 أو اتركه فارغاً للتوليد التلقائي" dir="ltr" inputmode="numeric" maxlength="6" pattern="\d{0,6}" style="font-family:monospace;letter-spacing:1px">
                         <div style="font-size:.72rem;color:var(--ink-mid);margin-top:3px">سيُولَّد تلقائياً إن تُرك فارغاً</div>
                     </div>
                     <div class="col-md-4">
@@ -1159,7 +1159,7 @@
 
     <!-- ── App Entry Point ─────────────────────────────────── -->
 <!-- ── App Entry Point ─────────────────────────────────── -->
-    <script type="module" src="app.js?v=4"></script>
+    <script type="module" src="app.js?v=10"></script>
 
 </body>
 </html>

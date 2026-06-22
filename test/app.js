@@ -50,26 +50,51 @@ window.app = {
         return hashed === stored;
     },
 
+    _normalizeBarcode(code, { allowEmpty = true } = {}) {
+        const raw = String(code ?? '').trim();
+        if (!raw) return allowEmpty ? '' : null;
+        if (!/^\d{1,6}$/.test(raw)) return null;
+        return raw.padStart(6, '0');
+    },
+
+    _barcodeKey(code) {
+        const raw = String(code ?? '').trim();
+        if (!raw) return '';
+        return this._normalizeBarcode(raw, { allowEmpty: false }) || raw.toUpperCase();
+    },
+
     _barcodeExists(code, ignoreItemId = null, ignoreVarKey = null) {
-        const clean = (code || '').trim().toUpperCase();
+        const clean = this._barcodeKey(code);
         if (!clean) return false;
         return Object.entries(this.warehouse || {}).some(([id, w]) => {
-            if (id !== ignoreItemId && (w.barcode || '').toUpperCase() === clean) return true;
+            if (!(id === ignoreItemId && !ignoreVarKey) && this._barcodeKey(w.barcode) === clean) return true;
             return Object.entries(w.variations || {}).some(([key, v]) => {
                 if (id === ignoreItemId && key === ignoreVarKey) return false;
-                return (v.barcode || '').toUpperCase() === clean;
+                return this._barcodeKey(v.barcode) === clean;
             });
         });
     },
 
-    _generateBarcode(ignoreItemId = null, ignoreVarKey = null) {
-        let code = '';
-        do {
-            const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
-            const timePart = Date.now().toString(36).slice(-4).toUpperCase();
-            code = `JW${timePart}${randomPart}`.slice(0, 12);
-        } while (this._barcodeExists(code, ignoreItemId, ignoreVarKey));
-        return code;
+    _allBarcodeSet(ignoreItemId = null, ignoreVarKey = null) {
+        const set = new Set();
+        Object.entries(this.warehouse || {}).forEach(([id, w]) => {
+            if (!(id === ignoreItemId && !ignoreVarKey) && w.barcode) set.add(this._barcodeKey(w.barcode));
+            Object.entries(w.variations || {}).forEach(([key, v]) => {
+                if (id === ignoreItemId && key === ignoreVarKey) return;
+                if (v.barcode) set.add(this._barcodeKey(v.barcode));
+            });
+        });
+        return set;
+    },
+
+    _generateBarcode(ignoreItemId = null, ignoreVarKey = null, reserved = new Set()) {
+        const used = this._allBarcodeSet(ignoreItemId, ignoreVarKey);
+        [...reserved].forEach(code => { if (code) used.add(String(code).trim().toUpperCase()); });
+        for (let n = 1; n <= 999999; n++) {
+            const code = String(n).padStart(6, '0');
+            if (!used.has(code)) return code;
+        }
+        throw new Error('لا توجد باركودات رقمية متاحة ضمن نطاق 000001-999999');
     },
 
     // ============ LOGIN ============
@@ -1219,6 +1244,88 @@ const mob = document.getElementById('eCustMob')?.value.replace(/\D/g, '') || '';
         return this._itemsOf(o).reduce((sum, it) => sum + this._safeQty(it.qty, 1), 0);
     },
 
+    _orderDateText(o) {
+        if (o?.date) return o.date;
+        const ts = Number(o?.timestamp || 0);
+        return ts ? new Date(ts).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
+    },
+
+    _canEditOrder(o, id = null) {
+        if (!o) return false;
+        if (this.role === 'Admin') return true;
+        if (o.status !== 'new') return false;
+        if (this.role === 'User') return !o.entryUser || !this.userName || o.entryUser === this.userName;
+        return false;
+    },
+
+    _collectOrderItemRows() {
+        const items = [];
+        const rows = document.querySelectorAll('#mo_items_editor .ir-item');
+        for (let i = 0; i < rows.length; i++) {
+            const itemName = rows[i].value.trim();
+            const foundEntry = Object.entries(this.warehouse).find(([, w]) => w.name === itemName);
+            const itemId = foundEntry ? foundEntry[0] : null;
+            const item = foundEntry ? foundEntry[1] : null;
+            const sizeCombo = document.querySelector(`#mo_items_editor .ir-size[data-idx="${i}"]`)?.value || '';
+            const color = document.getElementById(`ir_color_${i}`)?.value || '';
+            const qty = this._safeQty(document.querySelector(`#mo_items_editor .ir-qty[data-idx="${i}"]`)?.value, 1);
+
+            if (!itemId || !sizeCombo || !color) {
+                return { ok: false, message: `يرجى اختيار المنتج واللون والمقاس للصف ${i + 1}` };
+            }
+
+            let finalSize = sizeCombo;
+            let finalColor = color;
+            if (sizeCombo.includes(' - ')) {
+                finalSize = sizeCombo.split(' - ')[0];
+                finalColor = sizeCombo.split(' - ').slice(1).join(' - ');
+            }
+            items.push({ itemId, itemName: item.name, itemColor: finalColor, size: finalSize, exactKey: sizeCombo, qty });
+        }
+        if (!items.length) return { ok: false, message: 'يجب أن يحتوي الطلب على صنف واحد على الأقل' };
+        return { ok: true, items };
+    },
+
+    _stockReplacePlan(oldItems, newItems, orderStatus, wasDeducted) {
+        const shouldDeduct = this._isStockActiveStatus(orderStatus);
+        const buckets = new Map();
+        const addDelta = (it, delta) => {
+            if (!it?.itemId || !delta) return;
+            const item = this.warehouse[it.itemId];
+            if (!item) return;
+            const key = this._stockKey(item, it);
+            if (!key) return;
+            const path = `jawaher_warehouse/${it.itemId}/sizes/${key}`;
+            if (!buckets.has(path)) {
+                buckets.set(path, {
+                    path, itemId: it.itemId, key,
+                    name: item.name || it.itemName || 'صنف',
+                    current: this._safeNum(item.sizes?.[key], 0),
+                    delta: 0,
+                });
+            }
+            buckets.get(path).delta += delta;
+        };
+
+        if (wasDeducted) this._itemsOf({ items: oldItems }).forEach(it => addDelta(it, this._safeQty(it.qty, 1)));
+        if (shouldDeduct) this._itemsOf({ items: newItems }).forEach(it => addDelta(it, -this._safeQty(it.qty, 1)));
+
+        const updates = {};
+        for (const b of buckets.values()) {
+            const next = b.current + b.delta;
+            if (next < 0) {
+                return {
+                    ok: false,
+                    updates: {},
+                    stockDeducted: wasDeducted,
+                    message: `الرصيد غير كافٍ لـ ${b.name} (${b.key}). المتوفر فعلياً بعد إرجاع كمية الطلب الحالية لا يغطي التعديل المطلوب.`,
+                };
+            }
+            updates[b.path] = next;
+        }
+        return { ok: true, updates, stockDeducted: shouldDeduct };
+    },
+
     _statusCounts(orders) {
         const counts = { new: 0, process: 0, done: 0, delivered: 0, postponed: 0, canceled: 0 };
         orders.forEach(o => { if (counts[o.status] !== undefined) counts[o.status]++; });
@@ -1363,7 +1470,7 @@ addItemRow() {
                 <!-- Row header: number + delete -->
                 <div class="item-row-header">
                     <span class="item-row-num">${idx + 1}</span>
-                    ${idx > 0 ? `<button class="btn-j btn-ruby btn-xs-j item-row-del" onclick="app.removeItemRow(${idx})">
+                    ${this.itemRows.length > 1 ? `<button class="btn-j btn-ruby btn-xs-j item-row-del" onclick="app.removeItemRow(${idx})">
                         <i class="fas fa-times"></i> حذف
                     </button>` : '<span></span>'}
                 </div>
@@ -1935,56 +2042,68 @@ addItemRow() {
         this.modalOrderId = id;
         const o = this.orders[id];
         if (!o) return;
-        const isRO = this.role !== 'Admin';
+
+        const canEdit = this._canEditOrder(o, id);
+        const isRO = !canEdit;
         const dis = isRO ? 'disabled' : '';
-        const wLink = `https://wa.me/${o.custMob.replace('+', '')}`;
+        const displayItems = this._itemsOf(o);
+        const wLink = `https://wa.me/${String(o.custMob || '').replace('+', '')}`;
+        const itemsViewHtml = displayItems.map((item) => `
+            <div class="item-row-view" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+                <div style="display:flex;flex-direction:column;min-width:0">
+                    <span style="font-weight:800;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(item.itemName || 'صنف غير معروف')}</span>
+                    <span style="font-size:.75rem;color:var(--gold-dark);">مقاس: ${this._escapeHtml(item.size || '-')}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+                    <span style="font-size:.8rem;border-right:4px solid ${this._colorHex(item.itemColor) || 'var(--border)'};padding-right:6px;">${this._escapeHtml(item.itemColor || 'بدون لون')}</span>
+                    <span style="font-weight:700;color:var(--emerald);background:rgba(26,107,74,.1);padding:2px 8px;border-radius:5px;">x${this._safeQty(item.qty, 1)}</span>
+                </div>
+            </div>
+        `).join('');
 
         document.getElementById('orderModalTitle').textContent = `طلب #${id.slice(-6)}`;
         document.getElementById('orderModalContent').innerHTML = `
             <div class="row g-3">
-                <div class="col-6"><label class="form-label-j">الزبون</label><input id="mo_name" class="form-control-j" value="${o.custName}" ${dis}></div>
+                <div class="col-6"><label class="form-label-j">الزبون</label><input id="mo_name" class="form-control-j" value="${this._escapeHtml(o.custName || '')}" ${dis}></div>
                 <div class="col-6"><label class="form-label-j">الموبايل</label>
                     <div style="display:flex;gap:4px">
-                        <input id="mo_mob" class="form-control-j" value="${o.custMob}" dir="ltr" style="text-align:left" ${dis}>
+                        <input id="mo_mob" class="form-control-j" value="${this._escapeHtml(o.custMob || '')}" dir="ltr" style="text-align:left" ${dis}>
                         <a href="${wLink}" target="_blank" class="btn-j btn-emerald btn-sm-j"><i class="fab fa-whatsapp"></i></a>
                     </div>
                 </div>
-                <div class="col-12"><label class="form-label-j">العنوان</label><input id="mo_addr" class="form-control-j" value="${o.custAddr || ''}" ${dis}></div>
-              <!-- قسم عرض الأصناف المتعددة -->
-<div class="col-12">
-    <label class="form-label-j"><i class="fas fa-shopping-basket"></i> الأصناف المطلوبة</label>
-  <div class="items-display-list" style="background: var(--paper-warm); border-radius: 10px; padding: 10px; border: 1px solid var(--border);">
-     ${(o.items || [{ itemName: o.itemName, size: o.size, itemColor: o.itemColor, qty: o.qty }]).map((item, idx) => `
-            <div class=\"item-row-view\" id=\"mo_item_${idx}\" style=\"display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);\">
-                <div style=\"display:flex;flex-direction:column;\">
-                    <span style=\"font-weight:800;font-size:.9rem;\">${item.itemName || 'صنف غير معروف'}</span>
-                    <span style=\"font-size:.75rem;color:var(--gold-dark);\">مقاس: ${item.size || '-'}</span>
+                <div class="col-12"><label class="form-label-j">العنوان</label><input id="mo_addr" class="form-control-j" value="${this._escapeHtml(o.custAddr || '')}" ${dis}></div>
+                <div class="col-12">
+                    <label class="form-label-j"><i class="fas fa-shopping-basket"></i> الأصناف المطلوبة</label>
+                    ${canEdit ? `
+                        <div id="mo_items_editor" style="background:var(--paper-warm);border-radius:10px;padding:10px;border:1px solid var(--border)">
+                            <div id="eItemsList" style="display:block"></div>
+                        </div>
+                    ` : `
+                        <div class="items-display-list" style="background:var(--paper-warm);border-radius:10px;padding:10px;border:1px solid var(--border);">
+                            ${itemsViewHtml}
+                        </div>
+                    `}
                 </div>
-                <div style=\"display:flex;align-items:center;gap:8px;\">
-                    <span style=\"font-size:.8rem;border-right:4px solid ${this._colorHex(item.itemColor)};padding-right:6px;\">${item.itemColor || 'بدون لون'}</span>
-                    ${isRO ? `<span style=\"font-weight:700;color:var(--emerald);background:rgba(26,107,74,.1);padding:2px 8px;border-radius:5px;\">x${item.qty||1}</span>` : `
-                    <div class=\"qty-control\" style=\"transform:scale(.82);transform-origin:right\">
-                        <button class=\"qty-btn\" onclick=\"app._moAdjQty(${idx},-1)\">−</button>
-                        <input type=\"number\" id=\"mo_qty_${idx}\" class=\"form-control-j qty-input\" value=\"${item.qty||1}\" min=\"1\" style=\"width:40px\">
-                        <button class=\"qty-btn\" onclick=\"app._moAdjQty(${idx},1)\">+</button>
-                    </div>
-                    <button class=\"btn-j btn-ruby btn-xs-j\" onclick=\"app._moRemoveItem('${id}',${idx})\" title=\"حذف الصنف\"><i class=\"fas fa-times\"></i></button>`}
+                <div class="col-6">
+                    <label class="form-label-j">إجمالي الكمية</label>
+                    <input type="number" id="mo_qty" class="form-control-j" value="${this._qtySum(o)}" disabled>
                 </div>
-            </div>
-        `).join('')}
-    </div>
-<!-- السعر الإجمالي يبقى كما هو -->
-<div class="col-12 mt-2">
-    <label class="form-label-j">إجمالي السعر</label>
-    <input type="number" id="mo_price" class="form-control-j" value="${o.price || ''}" ${dis}>
-</div>
-                <div class="col-6"><label class="form-label-j">الكمية</label><input type="number" id="mo_qty" class="form-control-j" value="${o.qty || 1}" ${dis}></div>
-                <div class="col-6"><label class="form-label-j">الملاحظات</label><input id="mo_tags" class="form-control-j" value="${o.tags || ''}" ${dis}></div>
+                <div class="col-6">
+                    <label class="form-label-j">إجمالي السعر</label>
+                    <input type="number" id="mo_price" class="form-control-j" value="${this._escapeHtml(o.price || '')}" ${dis}>
+                </div>
+                <div class="col-12"><label class="form-label-j">الملاحظات</label><input id="mo_tags" class="form-control-j" value="${this._escapeHtml(o.tags || '')}" ${dis}></div>
+                ${o.status === 'new' && this.role === 'User' ? `
+                    <div class="col-12">
+                        <div style="background:rgba(201,168,76,.08);border:1px solid var(--border);border-radius:10px;padding:.65rem;font-size:.78rem;color:var(--gold-dark);font-weight:700">
+                            <i class="fas fa-edit"></i> هذا الطلب ما زال بحالة طلب جديد، لذلك يمكن تعديل الأصناف واللون والمقاس والكمية قبل الانتقال للمرحلة التالية.
+                        </div>
+                    </div>` : ''}
                 <div class="col-12">
                     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.5rem">
                         <div style="text-align:center;background:var(--paper-warm);border-radius:10px;padding:.6rem"><div style="font-size:.7rem;color:var(--ink-mid)">الحالة</div><div style="font-weight:800;font-size:.9rem">${STATUS_AR[o.status] || ''}</div></div>
-                        <div style="text-align:center;background:var(--paper-warm);border-radius:10px;padding:.6rem"><div style="font-size:.7rem;color:var(--ink-mid)">المدخل</div><div style="font-weight:800;font-size:.9rem">${o.entryUser || ''}</div></div>
-                        <div style="text-align:center;background:var(--paper-warm);border-radius:10px;padding:.6rem"><div style="font-size:.7rem;color:var(--ink-mid)">التاريخ</div><div style="font-weight:800;font-size:.9rem">${o.date || ''}</div></div>
+                        <div style="text-align:center;background:var(--paper-warm);border-radius:10px;padding:.6rem"><div style="font-size:.7rem;color:var(--ink-mid)">المدخل</div><div style="font-weight:800;font-size:.9rem">${this._escapeHtml(o.entryUser || '')}</div></div>
+                        <div style="text-align:center;background:var(--paper-warm);border-radius:10px;padding:.6rem"><div style="font-size:.7rem;color:var(--ink-mid)">التاريخ</div><div style="font-weight:800;font-size:.9rem">${this._orderDateText(o)}</div></div>
                     </div>
                 </div>
                 ${this.role === 'Admin' ? `
@@ -1996,10 +2115,32 @@ addItemRow() {
                 </div>` : ''}
             </div>`;
 
-        document.getElementById('modalUpdateBtn').style.display = isRO ? 'none' : '';
-        document.getElementById('modalDeleteBtn').onclick = () => this.deleteOrder(id);
+        if (canEdit) {
+            this.itemRows = displayItems.map((it, idx) => {
+                const wItem = this.warehouse[it.itemId] || null;
+                const key = wItem ? this._stockKey(wItem, it) : (it.exactKey || it.size || '');
+                return {
+                    id: Date.now() + idx,
+                    savedItem: it.itemName || wItem?.name || '',
+                    savedColor: it.itemColor || '',
+                    savedColorHex: this._colorHex(it.itemColor) || '',
+                    savedSize: key,
+                    savedQty: this._safeQty(it.qty, 1),
+                };
+            });
+            if (!this.itemRows.length) this.itemRows = [{ id: Date.now() }];
+            this.renderItemRows();
+        }
+
+        const updateBtn = document.getElementById('modalUpdateBtn');
+        if (updateBtn) updateBtn.style.display = canEdit ? '' : 'none';
+        const deleteBtn = document.getElementById('modalDeleteBtn');
+        if (deleteBtn) {
+            deleteBtn.style.display = this.role === 'Admin' ? '' : 'none';
+            deleteBtn.onclick = () => this.deleteOrder(id);
+        }
         document.getElementById('modalPrintBtn').onclick = () => { this.printOrder(o, id); this.closeModal('orderModal'); };
-        // زر إضافة صنف — للمدير فقط
+
         let addItemBtn = document.getElementById('modalAddItemBtn');
         if (!addItemBtn) {
             addItemBtn = document.createElement('button');
@@ -2008,12 +2149,14 @@ addItemRow() {
             addItemBtn.innerHTML = '<i class="fas fa-plus"></i> إضافة صنف';
             document.querySelector('#orderModal .d-flex.gap-2').prepend(addItemBtn);
         }
-        addItemBtn.style.display = this.role === 'Admin' ? '' : 'none';
-        addItemBtn.onclick = () => this.openAddItemToOrder(id);
+        addItemBtn.style.display = canEdit ? '' : 'none';
+        addItemBtn.onclick = () => this.addItemRow();
         this.openModal('orderModal');
     },
 
     openAddItemToOrder(orderId) {
+        const baseOrder = this.orders[orderId];
+        if (!this._canEditOrder(baseOrder, orderId)) { this.toast('لا يمكن إضافة أصناف لهذا الطلب بعد انتقاله من مرحلة طلب جديد', 'error'); return; }
         document.getElementById('addItemToOrderModal')?.remove();
         const modal = document.createElement('div');
         modal.id = 'addItemToOrderModal'; modal.className = 'modal-j open';
@@ -2038,6 +2181,7 @@ addItemRow() {
 
     async _confirmAddItemsToOrder(orderId) {
         const o = this.orders[orderId]; if (!o) return;
+        if (!this._canEditOrder(o, orderId)) { this.toast('لا يمكن تعديل هذا الطلب بعد انتقاله من مرحلة طلب جديد', 'error'); return; }
         const newItems = [];
         const rows = document.querySelectorAll('.ir-item');
         for (let i = 0; i < rows.length; i++) {
@@ -2076,6 +2220,8 @@ addItemRow() {
 async updateOrder() {
         const id = this.modalOrderId; if (!id) return;
         const o = this.orders[id]; if (!o) return;
+        if (!this._canEditOrder(o, id)) { this.toast('لا يمكن تعديل هذا الطلب بعد انتقاله من مرحلة طلب جديد', 'error'); return; }
+
         try {
             const payload = {
                 custName: this._cleanText(document.getElementById('mo_name').value),
@@ -2084,50 +2230,47 @@ async updateOrder() {
                 price: this._safeNum(document.getElementById('mo_price').value, 0),
                 tags: this._cleanText(document.getElementById('mo_tags').value),
             };
-            const updates = { [`jawaher_orders/${id}`]: { ...o, ...payload } };
+            if (!payload.custName) { this.toast('اسم الزبون إجباري', 'error'); return; }
+            if (!payload.custMob) { this.toast('رقم الموبايل إجباري', 'error'); return; }
+            if (!payload.custAddr) { this.toast('العنوان إجباري', 'error'); return; }
+            if (!payload.price || payload.price <= 0) { this.toast('يرجى إدخال سعر صحيح', 'error'); return; }
 
-            if (Array.isArray(o.items) && o.items.length) {
-                const oldItems = this._itemsOf(o);
-                const newItems = oldItems.map((it, idx) => {
-                    const el = document.getElementById(`mo_qty_${idx}`);
-                    return el ? { ...it, qty: this._safeQty(el.value, it.qty) } : it;
-                });
-                payload.items = newItems;
-                payload.qty = newItems.reduce((s, it) => s + this._safeQty(it.qty, 1), 0);
-                updates[`jawaher_orders/${id}/items`] = newItems;
-                updates[`jawaher_orders/${id}/qty`] = payload.qty;
-
-                if (o.stockDeducted) {
-                    const buckets = new Map();
-                    newItems.forEach((it, idx) => {
-                        const oldQty = this._safeQty(oldItems[idx]?.qty, 1);
-                        const newQty = this._safeQty(it.qty, 1);
-                        const qtyDelta = newQty - oldQty;
-                        if (qtyDelta === 0 || !it.itemId) return;
-                        const item = this.warehouse[it.itemId]; if (!item) return;
-                        const key = this._stockKey(item, it);
-                        const path = `jawaher_warehouse/${it.itemId}/sizes/${key}`;
-                        if (!buckets.has(path)) {
-                            buckets.set(path, { path, name: item.name || it.itemName || 'صنف', key, current: this._safeNum(item.sizes?.[key], 0), delta: 0 });
-                        }
-                        // Increasing order qty deducts extra stock; decreasing order qty returns stock.
-                        buckets.get(path).delta += -qtyDelta;
-                    });
-                    for (const b of buckets.values()) {
-                        const next = b.current + b.delta;
-                        if (next < 0) {
-                            this.toast(`الرصيد غير كافٍ لتعديل ${b.name} (${b.key}). المتوفر ${b.current} والمطلوب ${Math.abs(b.delta)}.`, 'error');
-                            return;
-                        }
-                        updates[b.path] = next;
-                    }
-                }
+            const oldItems = this._itemsOf(o);
+            let newItems = oldItems;
+            if (document.getElementById('mo_items_editor')) {
+                const collected = this._collectOrderItemRows();
+                if (!collected.ok) { this.toast(collected.message, 'error'); return; }
+                newItems = collected.items;
             }
 
+            const stockPlan = this._stockReplacePlan(oldItems, newItems, o.status, !!o.stockDeducted);
+            if (!stockPlan.ok) { this.toast(stockPlan.message, 'error'); return; }
+
+            const totalQty = newItems.reduce((s, it) => s + this._safeQty(it.qty, 1), 0);
+            const first = newItems[0] || {};
+            const updates = {
+                [`jawaher_orders/${id}/custName`]: payload.custName,
+                [`jawaher_orders/${id}/custMob`]: payload.custMob,
+                [`jawaher_orders/${id}/custAddr`]: payload.custAddr,
+                [`jawaher_orders/${id}/price`]: payload.price,
+                [`jawaher_orders/${id}/tags`]: payload.tags,
+                [`jawaher_orders/${id}/items`]: newItems,
+                [`jawaher_orders/${id}/qty`]: totalQty,
+                [`jawaher_orders/${id}/itemId`]: first.itemId || '',
+                [`jawaher_orders/${id}/itemName`]: first.itemName || '',
+                [`jawaher_orders/${id}/itemColor`]: first.itemColor || '',
+                [`jawaher_orders/${id}/size`]: first.size || '',
+                [`jawaher_orders/${id}/exactKey`]: first.exactKey || '',
+                [`jawaher_orders/${id}/stockDeducted`]: stockPlan.stockDeducted,
+                [`jawaher_orders/${id}/updatedAt`]: Date.now(),
+                [`jawaher_orders/${id}/updatedBy`]: this.userName || this.user || '',
+            };
+            Object.assign(updates, stockPlan.updates);
+
             await update(ref(db), updates);
-            this.log('edit', id, 'تعديل بيانات الطلب مع تسوية المخزون');
-            this._auditLog('order_edit', id, o, payload, `تعديل طلب ${o.custName}`);
-            this.toast('تم حفظ التعديلات وتحديث المخزون بدقة ✓', 'success');
+            this.log('edit', id, 'تعديل بيانات الطلب والأصناف مع تسوية فرق المخزون');
+            this._auditLog('order_edit', id, o, { ...payload, items: newItems, qty: totalQty }, `تعديل طلب ${o.custName}`);
+            this.toast('تم حفظ التعديلات وتحديث الطلب دون تكرار ✓', 'success');
             this.closeModal('orderModal');
         } catch (err) {
             console.error(err);
@@ -2306,6 +2449,7 @@ async deductStock(orderId) {
             }];
             const bcId  = `bc${idx}`;
             const bcVal = id.slice(-12).toUpperCase();
+            const orderDate = this._orderDateText(o);
 
             let sellPrice = '';
             // sellPrice removed from label per request — only total price shown
@@ -2336,6 +2480,7 @@ async deductStock(orderId) {
     <div class="lb">
       <div class="lc lcr">
         <div class="lf"><div class="lfl">اسم الزبون</div><div class="lfv lname">${o.custName || ''}</div></div>
+        <div class="lf lfsm"><div class="lfl">تاريخ الطلب</div><div class="lfv ldate">${orderDate}</div></div>
         <div class="lf lfsm"><div class="lfl">التواصل</div><div class="lfv">${contactHtml || '—'}</div></div>
         <div class="lf"><div class="lfl">الصنف</div><div class="lfv litem">${itemNames}</div></div>
         <div class="lf lfsm"><div class="lfl">اللون</div><div class="lfv">${itemColors}</div></div>
@@ -2388,6 +2533,7 @@ body { margin: 0 }
 .litem  { font-size:8.5pt; font-weight:800; white-space:normal; line-height:1.15 }
 .laddr  { font-size:7.5pt; white-space:normal; line-height:1.2 }
 .lphone { font-size:10.5pt; font-weight:800; text-align:right }
+.ldate { font-size:8.5pt; font-weight:900; color:#0F2260; direction:ltr; text-align:right }
 .lprice-box { background:#e6f4ed !important; border-color:#1A6B4A !important; flex-shrink:0 }
 .lprice { font-size:13pt; font-weight:800; color:#1A6B4A }
 .lnotes { font-size:7pt; white-space:normal; line-height:1.2 }
@@ -2771,7 +2917,7 @@ ${labelsHtml}
                     <input type="text"   id="nim_color_${i}" class="form-control-j nim-c-val" placeholder="اللون" readonly
                         style="width:80px;cursor:pointer;font-size:.8rem;border-right:4px solid ${hex || 'var(--border)'}"
                         value="${c}" data-hex="${hex}" onclick="app.openColorPicker(${i},'nim_color')">
-                    <input type="text"   class="form-control-j nim-b-val" placeholder="${mainBarcode || 'باركود (اختياري)'}" value="${b}" style="flex:1;min-width:100px;font-size:.85rem;font-family:monospace;background:${b && b === mainBarcode ? 'rgba(201,168,76,.06)' : 'inherit'}" dir="ltr" title="يرث باركود المنتج تلقائياً — قابل للتعديل">
+                    <input type="text"   class="form-control-j nim-b-val" placeholder="تلقائي 000001" value="${b}" inputmode="numeric" maxlength="6" pattern="\\d{0,6}" style="flex:1;min-width:100px;font-size:.85rem;font-family:monospace;background:${b && b === mainBarcode ? 'rgba(201,168,76,.06)' : 'inherit'}" dir="ltr" title="يُولّد تلقائياً كرقم من 6 خانات — قابل للإدخال اليدوي الرقمي فقط">
                     <input type="number" class="form-control-j nim-q-val" placeholder="كمية" min="0" value="0" style="width:65px">
                     <button class="btn-j btn-ruby btn-xs-j" onclick="app.removeNimSizeRow(${i})" style="flex-shrink:0;padding:.3rem .5rem"><i class="fas fa-times"></i></button>
                 </div>
@@ -2801,18 +2947,17 @@ ${labelsHtml}
             const sz = row.querySelector('.nim-s-val')?.value.trim() || '';
             const c = row.querySelector('.nim-c-val')?.value.trim() || '';
             const hex = row.querySelector('.nim-c-val')?.dataset?.hex || '';
-            let b = row.querySelector('.nim-b-val')?.value.trim().toUpperCase() || '';
+            const rawBarcode = row.querySelector('.nim-b-val')?.value.trim() || '';
+            let b = rawBarcode ? this._normalizeBarcode(rawBarcode) : '';
             const qty = parseInt(row.querySelector('.nim-q-val')?.value) || 0;
             if (sz && !c) {
                 this.toast(`المقاس ${sz} يحتاج لتحديد لون!`, 'error');
                 return;
             }
             if (!sz) continue;
-            if (!b) b = this._generateBarcode();
-            if (usedBarcodes.has(b)) { this.toast(`Ø§Ù„Ø¨Ø§Ø±ÙƒÙˆØ¯ ${b} Ù…ÙƒØ±Ø± ÙÙŠ Ù†ÙØ³ Ø§Ù„Ù…Ù†ØªØ¬`, 'error'); return; }
+            if (b === null) { this.toast('الباركود يجب أن يكون أرقاماً فقط وبحد أقصى 6 خانات', 'error'); return; }
+            if (!b || usedBarcodes.has(b) || this._barcodeExists(b)) b = this._generateBarcode(null, null, usedBarcodes);
             usedBarcodes.add(b);
-            const existing = Object.values(this.warehouse).find(w => w.barcode === b || (w.variations && Object.values(w.variations).some(v => v.barcode === b)));
-            if (existing) { this.toast(`الباركود ${b} مستخدم مسبقاً`, 'error'); return; }
             const key = c ? `${sz} - ${c}` : sz;
             sizes[key] = (sizes[key] || 0) + qty;
             variations[key] = { size: sz, color: c, hex, barcode: b };
@@ -2920,7 +3065,7 @@ ${labelsHtml}
                     <button type="button" class="warehouse-mini-btn" onclick="app.inlineEditBarcode('${this._jsArg(id)}','${this._jsArg(key)}')" title="تعديل الباركود">
                         <i class="fas fa-pencil-alt"></i>
                     </button>
-                    <button type="button" class="warehouse-barcode-chip" onclick="app.showBarcode('${this._jsArg(vCode)}','${this._jsArg(w.name)}','${this._jsArg(dispSize)}','${this._jsArg(vColor)}','${this._jsArg(w.pageName || '')}','${this._jsArg(id)}')" title="عرض / طباعة الباركود">
+                    <button type="button" class="warehouse-barcode-chip" onclick="app.showBarcode('${this._jsArg(vCode)}','${this._jsArg(w.name)}','${this._jsArg(dispSize)}','${this._jsArg(vColor)}','${this._jsArg(w.pageName || '')}','${this._jsArg(id)}','${this._jsArg(key)}')" title="عرض / طباعة الباركود">
                         <span>${this._escapeHtml(vCode)}</span>
                         <i class="fas fa-barcode"></i>
                     </button>
@@ -3138,15 +3283,9 @@ ${labelsHtml}
             : (item.barcode || '');
         const val = prompt('تعديل الباركود:', current);
         if (val === null) return;
-        const clean = val.trim().toUpperCase();
-        if (!clean) { this.toast('الباركود لا يمكن أن يكون فارغاً', 'error'); return; }
-        // فحص التكرار (تجاهل نفس الصنف)
-        const dup = Object.entries(this.warehouse).find(([id, w]) => {
-            if (id === itemId) return false;
-            if (w.barcode === clean) return true;
-            return Object.values(w.variations || {}).some(v => v.barcode === clean);
-        });
-        if (dup) { this.toast(`الباركود ${clean} مستخدم في صنف آخر`, 'error'); return; }
+        const clean = this._normalizeBarcode(val, { allowEmpty: false });
+        if (!clean) { this.toast('الباركود يجب أن يكون رقماً من 6 خانات كحد أقصى', 'error'); return; }
+        if (this._barcodeExists(clean, itemId, varKey || null)) { this.toast(`الباركود ${clean} مستخدم مسبقاً`, 'error'); return; }
         const path = varKey
             ? `jawaher_warehouse/${itemId}/variations/${varKey}/barcode`
             : `jawaher_warehouse/${itemId}/barcode`;
@@ -3173,98 +3312,102 @@ ${labelsHtml}
             .then(() => this.toast('تم حفظ الملاحظة ✓', 'success'));
     },
 
-    showBarcode(code, itemName, size, color, pageName, itemId) {
+    showBarcode(code, itemName, size, color, pageName, itemId, varKey = '') {
         // دعم الاستدعاء القديم (code, name)
         if (size === undefined) {
             const parts = (itemName || '').split(' - ');
             size     = parts.slice(1).join(' - ') || '';
             itemName = parts[0] || '';
         }
-        const colorHex  = this._colorHex(color) || '';
+        const item = itemId ? this.warehouse[itemId] : null;
+        const variation = item && varKey ? item.variations?.[varKey] : null;
+        const stockQty = item && varKey ? this._safeNum(item.sizes?.[varKey], 0) : null;
+        const finalSize = variation?.size || size || (varKey?.includes(' - ') ? varKey.split(' - ')[0] : varKey) || '';
+        const finalColor = variation?.color || color || (varKey?.includes(' - ') ? varKey.split(' - ').slice(1).join(' - ') : item?.color || '') || '';
+        const colorHex  = this._colorHex(finalColor) || '';
         const colorDot  = colorHex
             ? `<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${colorHex};border:1px solid rgba(0,0,0,.15);vertical-align:middle;margin-left:4px"></span>`
             : '';
-        const sellPrice = itemId && this.warehouse[itemId]?.sellPrice
-            ? this.warehouse[itemId].sellPrice : '';
+        const sellPrice = item?.sellPrice || '';
+        const buyPrice  = item?.buyPrice || '';
         const modal = document.createElement('div');
         modal.className = 'modal-j open';
         modal.innerHTML = `
         <div class="modal-overlay" onclick="this.parentElement.remove()"></div>
-        <div class="modal-sheet" style="max-width:370px;text-align:center">
+        <div class="modal-sheet" style="max-width:410px;text-align:center">
             <div class="modal-handle"></div>
-            <div class="modal-title" style="font-size:1rem;margin-bottom:.5rem">${itemName}</div>
-            ${size     ? `<div style="font-size:.82rem;color:var(--ink-mid);margin-bottom:2px">المقاس: <strong>${size}</strong></div>` : ''}
-            ${color    ? `<div style="font-size:.82rem;color:var(--ink-mid);margin-bottom:2px">${colorDot}اللون: <strong>${color}</strong></div>` : ''}
-            ${sellPrice ? `<div style="font-size:.82rem;color:var(--emerald);margin-bottom:4px;font-weight:800"><i class="fas fa-tag"></i> سعر البيع: ${sellPrice} JOD</div>` : ''}
-            ${pageName ? `<div style="font-size:.78rem;color:var(--gold);margin-bottom:.75rem"><i class="fas fa-file-alt" style="font-size:.7rem;margin-left:3px"></i>${pageName}</div>` : '<div style="margin-bottom:.75rem"></div>'}
+            <div class="modal-title" style="font-size:1rem;margin-bottom:.5rem">${this._escapeHtml(itemName || item?.name || 'معلومات الصنف')}</div>
+            <div style="background:var(--paper-warm);border:1px solid var(--border);border-radius:12px;padding:.7rem;margin-bottom:.75rem;text-align:right;font-size:.82rem">
+                <div style="display:grid;grid-template-columns:95px 1fr;gap:.35rem .6rem;align-items:center">
+                    <strong style="color:var(--ink-mid)">اسم الصنف</strong><span>${this._escapeHtml(itemName || item?.name || '—')}</span>
+                    <strong style="color:var(--ink-mid)">رقم الباركود</strong><span dir="ltr" style="font-family:monospace;font-weight:900;letter-spacing:1.2px">${this._escapeHtml(code)}</span>
+                    <strong style="color:var(--ink-mid)">السعر</strong><span style="color:var(--emerald);font-weight:900">${sellPrice ? `${this._escapeHtml(sellPrice)} JOD` : '—'}</span>
+                    <strong style="color:var(--ink-mid)">المقاس</strong><span>${this._escapeHtml(finalSize || '—')}</span>
+                    <strong style="color:var(--ink-mid)">اللون</strong><span>${colorDot}${this._escapeHtml(finalColor || '—')}</span>
+                    <strong style="color:var(--ink-mid)">الموديل/الصفحة</strong><span>${this._escapeHtml(pageName || item?.pageName || '—')}</span>
+                    <strong style="color:var(--ink-mid)">الرصيد</strong><span>${stockQty === null ? '—' : `${stockQty} قطعة`}</span>
+                    ${buyPrice ? `<strong style="color:var(--ink-mid)">سعر الشراء</strong><span>${this._escapeHtml(buyPrice)} JOD</span>` : ''}
+                    ${item?.notes ? `<strong style="color:var(--ink-mid)">ملاحظة</strong><span>${this._escapeHtml(item.notes)}</span>` : ''}
+                </div>
+            </div>
             <div style="background:#fff;border-radius:8px;padding:.5rem;border:1px solid var(--border);margin-bottom:.75rem">
                 <svg id="barcodeModal"></svg>
-                <div style="font-size:.75rem;color:#777;font-family:monospace;margin-top:2px">${code}</div>
-                ${sellPrice ? `<div style="font-size:.85rem;font-weight:800;color:#1A6B4A;margin-top:4px">${sellPrice} JOD</div>` : ''}
+                <div style="font-size:.9rem;color:#111;font-family:monospace;margin-top:2px;font-weight:900;letter-spacing:1px" dir="ltr">${this._escapeHtml(code)}</div>
             </div>
-            <button class="btn-j btn-gold w-100" onclick="app._printBarcode('${code}','${(itemName||'').replace(/'/g,"\\'")}','${(size||'').replace(/'/g,"\\'")}','${(color||'').replace(/'/g,"\\'")}','${(pageName||'').replace(/'/g,"\\'")}','${sellPrice}')">
+            <button class="btn-j btn-gold w-100" onclick="app._printBarcode('${this._jsArg(code)}','${this._jsArg(itemName || item?.name || '')}','${this._jsArg(finalSize)}','${this._jsArg(finalColor)}','${this._jsArg(pageName || item?.pageName || '')}','${this._jsArg(sellPrice)}')">
                 <i class="fas fa-print"></i> طباعة الباركود
             </button>
         </div>`;
         document.body.appendChild(modal);
-        JsBarcode('#barcodeModal', code, { format:'CODE128', width:2, height:60, displayValue:true, font:'Almarai' });
+        JsBarcode('#barcodeModal', code, { format:'CODE128', width:2, height:62, displayValue:true, font:'monospace', fontSize:16, margin:4 });
     },
 
     _printBarcode(code, itemName, size, color, pageName, sellPrice) {
-        const win = window.open('', '_blank', 'width=460,height=340');
+        const win = window.open('', '_blank', 'width=420,height=260');
         if (!win) { this.toast('فعّل النوافذ المنبثقة في المتصفح', 'error'); return; }
 
-        const colorHex   = this._colorHex(color) || '';
-        const colorSwatch = colorHex
-            ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${colorHex};border:1px solid rgba(0,0,0,.15);vertical-align:middle;margin-left:3px"></span>`
-            : '';
-
-        const rows = [
-            itemName ? `<tr><td class="lbl">الصنف</td><td class="val">${itemName}</td></tr>`      : '',
-            size     ? `<tr><td class="lbl">المقاس</td><td class="val"><strong>${size}</strong></td></tr>` : '',
-            color    ? `<tr><td class="lbl">اللون</td><td class="val">${colorSwatch}${color}</td></tr>`    : '',
-            pageName ? `<tr><td class="lbl">الصفحة</td><td class="val" style="color:#9A5500">${pageName}</td></tr>` : '',
-            sellPrice ? `<tr><td class="lbl">السعر</td><td class="val" style="color:#1A6B4A;font-weight:800">${sellPrice} JOD</td></tr>` : '',
-        ].filter(Boolean).join('');
+        const cleanCode = this._escapeHtml(code);
+        const jsCode = this._jsArg(code);
+        const colorHex = this._colorHex(color) || '#111';
+        const shortName = this._escapeHtml(itemName || pageName || '');
+        const metaLine = [size, color].filter(Boolean).map(x => this._escapeHtml(x)).join(' / ');
 
         win.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head>
-<meta charset="UTF-8"><title>باركود — ${itemName} ${size}</title>
+<meta charset="UTF-8"><title>باركود — ${shortName}</title>
 <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"><\/script>
 <style>
-  @page { size:9cm 5.5cm; margin:0 }
+  @page { size:6cm 2cm; margin:0 }
   *,*::before,*::after { box-sizing:border-box; margin:0; padding:0 }
-  html,body { width:9cm; height:5.5cm; background:#fff; font-family:'Almarai',Arial,sans-serif }
+  html,body { width:6cm; height:2cm; background:#fff; font-family:'Almarai',Arial,sans-serif; overflow:hidden }
   @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact } }
   body { display:flex; align-items:center; justify-content:center }
-  .card { width:9cm; height:5.5cm; border:1.5px solid #1A3A8F; border-radius:4px; display:flex; flex-direction:column; padding:2.5mm; overflow:hidden }
-  .hdr  { background:#0F2260; color:#7AA0F0; font-size:8pt; font-weight:800; text-align:center; padding:3px 4px; border-radius:3px; margin-bottom:2mm; flex-shrink:0; letter-spacing:.3px }
-  .body { display:flex; gap:2.5mm; flex:1; min-height:0; align-items:center }
-  .info { flex:1; min-width:0 }
-  .info table { width:100%; border-collapse:collapse }
-  .lbl  { font-size:7pt; color:#555; width:30%; white-space:nowrap; padding-bottom:2px; font-weight:700 }
-  .val  { font-size:7.5pt; color:#111; font-weight:700; padding-right:3px; padding-bottom:2px }
-  .bc   { flex-shrink:0; text-align:center }
-  .bc svg { width:105px !important; height:auto !important }
-  .code { font-size:6pt; color:#444; text-align:center; font-family:monospace; margin-top:1.5mm; flex-shrink:0; letter-spacing:.5px; font-weight:700 }
-  ${sellPrice ? `.price-badge { background:#e6f4ed; border:1.5px solid #1A6B4A; border-radius:4px; padding:2px 8px; font-size:9pt; font-weight:800; color:#1A6B4A; text-align:center; margin-top:2mm; flex-shrink:0 }` : ''}
+  .label { width:6cm; height:2cm; padding:1.2mm 1.4mm; display:grid; grid-template-columns:36mm 20mm; gap:1.4mm; align-items:center; overflow:hidden; border:.35mm solid #111; border-radius:1.2mm }
+  .bc { min-width:0; text-align:center; direction:ltr }
+  .bc svg { width:100% !important; height:11mm !important; display:block }
+  .code { font-family:monospace; font-size:8pt; font-weight:900; letter-spacing:.8px; line-height:1; margin-top:.2mm; color:#000; direction:ltr }
+  .info { min-width:0; display:flex; flex-direction:column; justify-content:center; gap:.35mm; line-height:1.05; overflow:hidden }
+  .name { font-size:5.8pt; font-weight:800; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .price { font-size:9pt; font-weight:900; color:#000; border:.25mm solid #111; border-radius:.8mm; padding:.2mm .8mm; text-align:center; line-height:1.1 }
+  .meta { font-size:6.4pt; font-weight:800; color:#111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .color-dot { display:inline-block; width:2.2mm; height:2.2mm; border-radius:50%; background:${colorHex}; border:.2mm solid #222; vertical-align:middle; margin-left:.7mm }
 </style>
 </head><body>
-<div class="card">
-  <div class="hdr">◆ شادي ملكاوي — ملصق الصنف ◆</div>
-  <div class="body">
-    <div class="info"><table>${rows}</table></div>
-    <div class="bc"><svg id="bc"></svg></div>
+<div class="label">
+  <div class="bc"><svg id="bc"></svg><div class="code">${cleanCode}</div></div>
+  <div class="info">
+    ${shortName ? `<div class="name">${shortName}</div>` : ''}
+    ${sellPrice ? `<div class="price">${this._escapeHtml(sellPrice)} JOD</div>` : ''}
+    ${metaLine ? `<div class="meta">${metaLine}</div>` : ''}
+    ${color ? `<div class="meta"><span class="color-dot"></span>${this._escapeHtml(color)}</div>` : ''}
   </div>
-  <div class="code">${code}</div>
-  ${sellPrice ? `<div class="price-badge">💰 ${sellPrice} JOD</div>` : ''}
 </div>
 <script>
 (function(){
   function run(){
     try{
-      JsBarcode('#bc','${code}',{format:'CODE128',width:1.6,height:46,displayValue:false,margin:2,background:'transparent'});
-    }catch(e){}
+      JsBarcode('#bc','${jsCode}',{format:'CODE128',width:1.15,height:34,displayValue:false,margin:0,background:'#ffffff',lineColor:'#000000'});
+    }catch(e){ console.warn(e); }
     setTimeout(function(){ window.print(); window.close(); }, 700);
   }
   if(document.readyState==='complete'){ run(); }
@@ -3391,7 +3534,9 @@ loadPurchaseItem() {
     async savePurchase() {
         const existingId = document.getElementById('pItem').value;
         const newName = document.getElementById('pNewItem').value.trim();
-        const manualBarcode = document.getElementById('pBarcode').value.trim().toUpperCase();
+        const manualRaw = document.getElementById('pBarcode').value.trim();
+        const manualBarcode = manualRaw ? this._normalizeBarcode(manualRaw) : '';
+        if (manualBarcode === null) { this.toast('الباركود يجب أن يكون أرقاماً فقط وبحد أقصى 6 خانات', 'error'); return; }
         const buyPrice = parseFloat(document.getElementById('pBuyPrice').value) || 0;
         const sellPrice = parseFloat(document.getElementById('pSellPrice').value) || 0;
         
@@ -3399,7 +3544,7 @@ loadPurchaseItem() {
         const invoiceDate = document.getElementById('pInvoiceDate').value || new Date().toLocaleDateString('en-GB');
         const notes = document.getElementById('pNotes').value.trim();
         const color = document.getElementById('pColor')?.value.trim() || '';
-        if (manualBarcode && this._barcodeExists(manualBarcode, existingId || null)) { this.toast(`Barcode ${manualBarcode} is already used`, 'error'); return; }
+        if (manualBarcode && this._barcodeExists(manualBarcode, existingId || null)) { this.toast(`الباركود ${manualBarcode} مستخدم مسبقاً`, 'error'); return; }
         if (!pageName) { this.toast('اسم الصفحة إجباري', 'error'); return; }
         if (!existingId && !newName) { this.toast('يرجى اختيار أو إدخال اسم المنتج', 'error'); return; }
 
@@ -3425,10 +3570,11 @@ for (const row of this.pSizeData) {
 
         let targetId = existingId;
         let isNewItem = false;
+        let mainBarcodeForNew = '';
         if (!targetId) {
             isNewItem = true;
-            const barcode = manualBarcode || this._generateBarcode();
-            const newRef = await push(warehouseRef, { name: newName, buyPrice, sellPrice, pageName, color, barcode, sizes: {}, sizeColors: {}, createdAt: Date.now() });
+            mainBarcodeForNew = manualBarcode || this._generateBarcode();
+            const newRef = await push(warehouseRef, { name: newName, buyPrice, sellPrice, pageName, color, barcode: mainBarcodeForNew, sizes: {}, sizeColors: {}, createdAt: Date.now() });
             targetId = newRef.key;
         }
         // للمنتج الجديد: الكاش المحلي لم يُحدَّث بعد، نبني البيانات من الجلسة الحالية
@@ -3440,7 +3586,7 @@ for (const row of this.pSizeData) {
         Object.entries(sizes).forEach(([s, q]) => { mergedSizes[s] = (mergedSizes[s] || 0) + q; });
         const mergedSizeColors = { ...existingSizeColors, ...sizeColors };
         const mergedVariations = { ...existingVariations };
-        const generatedPurchaseBarcodes = new Set();
+        const generatedPurchaseBarcodes = new Set(mainBarcodeForNew ? [mainBarcodeForNew] : []);
         Object.entries(variations).forEach(([key, v]) => {
             let barcode = mergedVariations[key]?.barcode || this._generateBarcode(targetId, key);
             while (generatedPurchaseBarcodes.has(barcode)) barcode = this._generateBarcode(targetId, key);
@@ -3453,7 +3599,7 @@ for (const row of this.pSizeData) {
         });
         const updateData = { buyPrice, sellPrice, pageName, sizes: mergedSizes, sizeColors: mergedSizeColors, variations: mergedVariations };
 
-        if (manualBarcode && !existingId) updateData.barcode = manualBarcode;
+        if (mainBarcodeForNew && !existingId) updateData.barcode = mainBarcodeForNew;
         await update(ref(db, `jawaher_warehouse/${targetId}`), updateData);
         await push(purchasesRef, { timestamp: Date.now(), date: invoiceDate, itemId: targetId, itemName: item?.name || newName, sizes, sizeColors, buyPrice, sellPrice, pageName, color, notes, user: this.userName });
         this.log('purchase', targetId, `شراء: ${JSON.stringify(sizes)} - صفحة: ${pageName} - سعر: ${buyPrice} JOD`);
@@ -4281,7 +4427,9 @@ updateRetSizes(itemIdx) {
         const newSize = document.getElementById('icNewSize')?.value.trim();
         const color   = document.getElementById('icColor')?.value.trim();
         const realQty = parseInt(document.getElementById('icRealQty')?.value);
-        const typedBarcode = document.getElementById('icBarcode')?.value.trim().toUpperCase() || '';
+        const rawTypedBarcode = document.getElementById('icBarcode')?.value.trim() || '';
+        const typedBarcode = rawTypedBarcode ? this._normalizeBarcode(rawTypedBarcode) : '';
+        if (typedBarcode === null) { this.toast('الباركود يجب أن يكون أرقاماً فقط وبحد أقصى 6 خانات', 'error'); return; }
         const reason  = document.getElementById('icReason')?.value || 'تصحيح جرد دوري';
         const notes   = document.getElementById('icNotes')?.value.trim() || '';
 
@@ -4294,7 +4442,7 @@ updateRetSizes(itemIdx) {
         const delta = realQty - currentQty;
         const isExistingVariation = Object.prototype.hasOwnProperty.call(item.variations || {}, key);
         const barcode = typedBarcode || (isExistingVariation ? item.variations[key]?.barcode : '') || this._generateBarcode(itemId, key);
-        if (typedBarcode && this._barcodeExists(typedBarcode, itemId, key)) { this.toast(`Ø§Ù„Ø¨Ø§Ø±ÙƒÙˆØ¯ ${typedBarcode} Ù…Ø³ØªØ®Ø¯Ù… Ù…Ø³Ø¨Ù‚Ø§Ù‹`, 'error'); return; }
+        if (typedBarcode && this._barcodeExists(typedBarcode, itemId, key)) { this.toast(`الباركود ${typedBarcode} مستخدم مسبقاً`, 'error'); return; }
 
         if (delta === 0) {
             this.toast('الكمية الفعلية مطابقة للمخزون — لا حاجة لتصحيح', 'info');
